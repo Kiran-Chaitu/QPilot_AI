@@ -1,4 +1,5 @@
 import { httpClient } from './httpClient';
+import type { ApiResponse } from '../types/common';
 
 export interface AiConfig {
   provider: string;
@@ -9,11 +10,11 @@ export interface AiConfig {
 }
 
 export async function getAiConfig(): Promise<AiConfig> {
-  const response = await httpClient.get<AiConfig>('/api/ai/config');
-  return response.data;
+  const { data } = await httpClient.get<ApiResponse<AiConfig>>('/ai/config');
+  return data.data as AiConfig;
 }
 
 export async function updateAiConfig(apiKey: string, model: string): Promise<AiConfig> {
-  const response = await httpClient.post<AiConfig>('/api/ai/config', { apiKey, model });
-  return response.data;
+  const { data } = await httpClient.post<ApiResponse<AiConfig>>('/ai/config', { apiKey, model });
+  return data.data as AiConfig;
 }

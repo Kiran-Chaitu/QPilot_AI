@@ -31,7 +31,7 @@ export async function runLoadTest(
   durationSeconds: number,
   rampUpSeconds: number
 ): Promise<LoadTestResponse> {
-  const response = await httpClient.post<LoadTestResponse>('/api/loadtest/run', {
+  const response = await httpClient.post<LoadTestResponse>('/loadtest/run', {
     targetUrl,
     vus,
     durationSeconds,

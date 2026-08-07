@@ -29,7 +29,7 @@ export function AiSettingsModal({ open, onClose, onConfigChanged }: AiSettingsMo
   const { showSuccess, showError } = useToast();
   const [config, setConfig] = useState<AiConfig | null>(null);
   const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('gemini-2.5-flash');
+  const [model, setModel] = useState('gemini-2.0-flash');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -46,7 +46,7 @@ export function AiSettingsModal({ open, onClose, onConfigChanged }: AiSettingsMo
       setConfig(data);
       if (data.model) setModel(data.model);
     } catch {
-      showError('Could not fetch AI configuration status.');
+      // silently ignore on load failure — user may not be authenticated yet
     } finally {
       setIsLoading(false);
     }
@@ -58,8 +58,10 @@ export function AiSettingsModal({ open, onClose, onConfigChanged }: AiSettingsMo
       const updated = await updateAiConfig(apiKey, model);
       setConfig(updated);
       setApiKey('');
-      showSuccess(updated.statusMessage);
+      showSuccess(updated.statusMessage || 'AI configuration updated successfully!');
       if (onConfigChanged) onConfigChanged();
+      // Auto-close dialog after successful save
+      onClose();
     } catch {
       showError('Failed to update Gemini API key configuration.');
     } finally {
@@ -102,7 +104,7 @@ export function AiSettingsModal({ open, onClose, onConfigChanged }: AiSettingsMo
               AI Engine & Gemini API Key Settings
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              Configure real Gemini 3.6 Flash reasoning or Smart Offline Engine
+              Configure Gemini AI model or use Smart Offline Engine
             </Typography>
           </Box>
         </Stack>
@@ -140,7 +142,7 @@ export function AiSettingsModal({ open, onClose, onConfigChanged }: AiSettingsMo
                 <Box sx={{ flexGrow: 1 }}>
                   <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                      Current Provider: {config?.provider === 'gemini' ? 'Google Gemini 2.5 Flash' : 'Smart Offline AI Engine'}
+                      Current Provider: {config?.provider === 'gemini' ? `Google ${config?.model || 'Gemini'}` : 'Smart Offline AI Engine'}
                     </Typography>
                     <Chip
                       label={config?.hasApiKey ? 'API Key Active' : 'Offline Mode'}
@@ -185,7 +187,8 @@ export function AiSettingsModal({ open, onClose, onConfigChanged }: AiSettingsMo
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
               >
-                <MenuItem value="gemini-2.5-flash">Gemini 2.5 Flash (Fast, Multimodal — Recommended)</MenuItem>
+                <MenuItem value="gemini-2.0-flash">Gemini 2.0 Flash (Fast, Multimodal — Recommended)</MenuItem>
+                <MenuItem value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite (Lightweight)</MenuItem>
                 <MenuItem value="gemini-1.5-pro">Gemini 1.5 Pro (Deep Code Reasoning)</MenuItem>
                 <MenuItem value="gemini-1.5-flash">Gemini 1.5 Flash (Standard)</MenuItem>
               </TextField>

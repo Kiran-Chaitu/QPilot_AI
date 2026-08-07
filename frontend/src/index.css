@@ -1,7 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', Consolas, monospace;
 }
 
@@ -21,29 +21,30 @@ body,
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Ambient Pitch Black Obsidian Background */
+/* Obsidian Ambient Background with Soft Micro Radials */
 body {
   background-color: #09090B;
   background-image: 
-    radial-gradient(at 15% 15%, rgba(16, 185, 129, 0.07) 0px, transparent 45%),
-    radial-gradient(at 85% 20%, rgba(168, 85, 247, 0.05) 0px, transparent 45%),
-    radial-gradient(at 50% 85%, rgba(245, 158, 11, 0.03) 0px, transparent 45%);
+    radial-gradient(at 10% 10%, rgba(16, 185, 129, 0.05) 0px, transparent 40%),
+    radial-gradient(at 90% 15%, rgba(139, 92, 246, 0.04) 0px, transparent 45%),
+    radial-gradient(at 50% 90%, rgba(59, 130, 246, 0.03) 0px, transparent 45%);
   background-attachment: fixed;
-  color: #FAFAFA;
+  color: #F4F4F5;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 .light-mode body {
   background-color: #F8FAFC;
   background-image: 
-    radial-gradient(at 15% 15%, rgba(16, 185, 129, 0.04) 0px, transparent 45%),
-    radial-gradient(at 85% 20%, rgba(168, 85, 247, 0.03) 0px, transparent 45%);
+    radial-gradient(at 10% 10%, rgba(5, 150, 105, 0.04) 0px, transparent 40%),
+    radial-gradient(at 90% 15%, rgba(124, 58, 237, 0.03) 0px, transparent 45%);
   color: #0F172A;
 }
 
 /* Custom Sleek Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -55,90 +56,87 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #10B981 0%, #A855F7 100%);
+  background: rgba(16, 185, 129, 0.4);
   border-radius: 4px;
+  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #10B981;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
 }
 
-/* Code Blocks & Monospace Styling */
+/* Code & Syntax Highlight Styling */
 code, pre {
   font-family: var(--font-mono);
 }
 
 code {
-  background: rgba(16, 185, 129, 0.12);
+  background: rgba(16, 185, 129, 0.1);
   color: #34D399;
-  border-radius: 6px;
-  padding: 2px 7px;
+  border-radius: 5px;
+  padding: 2px 6px;
   font-size: 0.85em;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .light-mode code {
   background: rgba(5, 150, 105, 0.08);
-  color: #059669;
+  color: #047857;
   border: 1px solid rgba(5, 150, 105, 0.2);
 }
 
 pre {
   background: #121215 !important;
-  color: #FAFAFA !important;
-  padding: 18px;
-  border-radius: 14px;
+  color: #F4F4F5 !important;
+  padding: 16px;
+  border-radius: 10px;
   overflow-x: auto;
   border: 1px solid rgba(255, 255, 255, 0.08);
   margin: 0;
-  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
 }
 
-/* Glassmorphism Obsidian Cards */
+/* Glassmorphism Card Effect */
 .glass-card {
   background: rgba(18, 18, 21, 0.85) !important;
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6) !important;
 }
 
 .light-mode .glass-card {
   background: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06) !important;
 }
 
-/* Hover Glowing Card Animations */
+/* Smooth Interactive Glow Cards */
 .glow-on-hover {
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s ease, box-shadow 0.25s ease;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .glow-on-hover:hover {
-  transform: translateY(-3px);
-  border-color: rgba(16, 185, 129, 0.6) !important;
-  box-shadow: 0 12px 30px rgba(16, 185, 129, 0.2) !important;
+  transform: translateY(-2px);
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15) !important;
 }
 
-/* Electric Emerald/Purple Gradient Text */
+/* Modern Gradient Text */
 .gradient-text {
-  background: linear-gradient(135deg, #10B981 0%, #34D399 50%, #A855F7 100%);
+  background: linear-gradient(135deg, #10B981 0%, #34D399 50%, #8B5CF6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-/* Live Pulse Ring Dot */
+/* Status Indicator Dot */
 @keyframes pulse-ring {
   0% {
     transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.8);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
   }
   70% {
     transform: scale(1);
-    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
   }
   100% {
     transform: scale(0.95);

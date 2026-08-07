@@ -74,7 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onMobileDrawerToggle, onOpenSear
   return (
     <>
       <AppBar
-        position="sticky"
+        position="static"
         color="default"
         elevation={0}
         sx={{
@@ -82,7 +82,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onMobileDrawerToggle, onOpenSear
           borderBottom: '1px solid',
           borderColor: 'divider',
           backdropFilter: 'blur(12px)',
-          zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
         <Toolbar sx={{ gap: 1, minHeight: 64, px: { xs: 2, md: 3 } }}>

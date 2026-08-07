@@ -11,8 +11,7 @@ import {
   Tabs,
   Typography,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { Copy, Check, Download, FileCode } from 'lucide-react';
+import { Copy, Check, Download, FileCode, ChevronDown } from 'lucide-react';
 import { useToast } from '../../../context/ToastContext';
 import type { GeneratedTestResponse, TestType } from '../../../types/analysis';
 
@@ -64,13 +63,13 @@ export function GeneratedTestsTab({ tests }: { tests: GeneratedTestResponse[] })
 
   if (tests.length === 0) {
     return (
-      <Box sx={{ textAlign: 'center', py: 6 }}>
-        <FileCode size={48} color="#6366F1" style={{ marginBottom: 12 }} />
-        <Typography variant="h6" sx={{ fontWeight: 700 }}>
-          No Tests Generated Yet
+      <Box sx={{ textAlign: 'center', py: 8 }}>
+        <FileCode size={48} color="#10B981" style={{ marginBottom: 12, opacity: 0.8 }} />
+        <Typography variant="h6" sx={{ fontWeight: 800 }}>
+          No Test Suites Generated Yet
         </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Run AI analysis from the Overview tab to generate unit, API, integration, and security test suites.
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 400, mx: 'auto', mt: 0.5 }}>
+          Run AI Multi-Agent Audit from the Overview tab to generate unit, API, integration, and security test suites.
         </Typography>
       </Box>
     );
@@ -81,7 +80,7 @@ export function GeneratedTestsTab({ tests }: { tests: GeneratedTestResponse[] })
       <Tabs
         value={activeType}
         onChange={(_, value) => setActiveType(value)}
-        sx={{ mb: 2 }}
+        sx={{ mb: 2.5 }}
         variant="scrollable"
         scrollButtons="auto"
       >
@@ -93,18 +92,29 @@ export function GeneratedTestsTab({ tests }: { tests: GeneratedTestResponse[] })
           ))}
       </Tabs>
 
-      <Stack spacing={1.5}>
+      <Stack spacing={2}>
         {filtered.map((test) => (
-          <Accordion key={test.id} variant="outlined" disableGutters sx={{ borderRadius: 2, overflow: 'hidden' }}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Accordion
+            key={test.id}
+            variant="outlined"
+            disableGutters
+            sx={{
+              borderRadius: 3,
+              overflow: 'hidden',
+              border: '1px solid',
+              borderColor: 'divider',
+              '&:before': { display: 'none' },
+            }}
+          >
+            <AccordionSummary expandIcon={<ChevronDown size={18} />}>
               <Stack direction="row" spacing={1.5} sx={{ width: '100%', pr: 2, alignItems: 'center' }}>
-                <Chip size="small" label={TYPE_LABELS[test.type]} color="primary" variant="outlined" sx={{ fontWeight: 600 }} />
-                <Typography sx={{ flexGrow: 1, fontWeight: 600 }}>{test.title}</Typography>
-                <Chip size="small" label={test.framework} color="secondary" />
+                <Chip size="small" label={TYPE_LABELS[test.type]} color="primary" variant="outlined" sx={{ fontWeight: 800 }} />
+                <Typography sx={{ flexGrow: 1, fontWeight: 700 }}>{test.title}</Typography>
+                <Chip size="small" label={test.framework} color="secondary" sx={{ fontWeight: 700 }} />
               </Stack>
             </AccordionSummary>
-            <AccordionDetails>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+            <AccordionDetails sx={{ p: 2.5, bgcolor: 'action.hover' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
                 <Typography variant="body2" color="text.secondary">
                   Target Component / Endpoint: <code>{test.targetName}</code>
                 </Typography>
@@ -114,6 +124,7 @@ export function GeneratedTestsTab({ tests }: { tests: GeneratedTestResponse[] })
                     variant="outlined"
                     startIcon={copiedId === test.id ? <Check size={14} /> : <Copy size={14} />}
                     onClick={() => handleCopyCode(test.id, test.code)}
+                    sx={{ fontWeight: 700 }}
                   >
                     {copiedId === test.id ? 'Copied' : 'Copy Code'}
                   </Button>
@@ -123,25 +134,28 @@ export function GeneratedTestsTab({ tests }: { tests: GeneratedTestResponse[] })
                     color="primary"
                     startIcon={<Download size={14} />}
                     onClick={() => handleDownloadCode(test)}
+                    sx={{ fontWeight: 700 }}
                   >
                     Download File
                   </Button>
                 </Stack>
               </Box>
-              <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
+
+              <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary', lineHeight: 1.5 }}>
                 {test.description}
               </Typography>
+
               <Box
                 component="pre"
                 sx={{
-                  bgcolor: '#0d1117',
-                  color: '#c9d1d9',
+                  bgcolor: '#09090B',
+                  color: '#FAFAFA',
                   p: 2.5,
-                  borderRadius: 2,
+                  borderRadius: 2.5,
                   overflowX: 'auto',
-                  fontSize: 13,
-                  fontFamily: 'JetBrains Mono, Consolas, Monaco, monospace',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  fontSize: '0.85rem',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  border: '1px solid rgba(255,255,255,0.08)',
                 }}
               >
                 {test.code}

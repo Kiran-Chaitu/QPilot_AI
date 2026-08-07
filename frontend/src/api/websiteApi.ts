@@ -30,6 +30,6 @@ export interface WebsiteAuditResponse {
 }
 
 export async function runWebsiteAudit(targetUrl: string): Promise<WebsiteAuditResponse> {
-  const response = await httpClient.post<WebsiteAuditResponse>('/api/website/audit', { targetUrl });
+  const response = await httpClient.post<WebsiteAuditResponse>('/website/audit', { targetUrl });
   return response.data;
 }

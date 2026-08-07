@@ -1,20 +1,26 @@
 package com.testforge.backend.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 /**
- * Spring Boot 4 auto-configures a Jackson 3 ({@code tools.jackson.databind.ObjectMapper}) bean
- * for HTTP message conversion. Our AI/JSON parsing code targets the classic Jackson 2 API
- * ({@code com.fasterxml.jackson.databind}, still pulled in transitively by jjwt/swagger-parser),
- * so we register our own bean here rather than depending on Spring's internal Jackson 3 instance.
+ * Configures the primary Jackson {@link ObjectMapper} bean with Java 8 Date/Time
+ * ({@code java.time.Instant}) support enabled to prevent serialization exceptions.
  */
 @Configuration
 public class JacksonConfig {
 
     @Bean
+    @Primary
     public ObjectMapper objectMapper() {
-        return new ObjectMapper();
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        mapper.findAndRegisterModules();
+        return mapper;
     }
 }

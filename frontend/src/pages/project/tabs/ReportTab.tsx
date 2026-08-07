@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert, Box, Button, Card, CardContent, Stack, Typography, Grid, Paper } from '@mui/material';
-import { FileText, Download, Code, Globe } from 'lucide-react';
+import { FileText, Download, Code, Globe, Sparkles } from 'lucide-react';
 import { downloadReport } from '../../../api/analysisApi';
 import { useToast } from '../../../context/ToastContext';
 import { extractErrorMessage } from '../../../api/httpClient';
@@ -65,39 +65,39 @@ export function ReportTab({ projectId, projectName, hasAnalysis }: ReportTabProp
 
   return (
     <Stack spacing={3}>
-      <Card variant="outlined">
-        <CardContent sx={{ textAlign: 'center', py: 6 }}>
-          <Box sx={{ p: 2, borderRadius: '50%', bgcolor: 'rgba(99, 102, 241, 0.1)', width: 64, height: 64, mx: 'auto', mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <FileText size={32} color="#6366F1" />
+      <Card sx={{ p: 4, textAlign: 'center' }}>
+        <CardContent sx={{ p: 0 }}>
+          <Box sx={{ p: 2, borderRadius: '50%', bgcolor: 'rgba(16, 185, 129, 0.12)', width: 68, height: 68, mx: 'auto', mb: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <FileText size={34} color="#10B981" />
           </Box>
           <Typography variant="h5" sx={{ fontWeight: 800, mb: 1 }}>
-            Enterprise AI Quality & Risk Reports
+            Executive Quality & Audit Reports
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 4, maxWidth: 540, mx: 'auto' }}>
-            Export comprehensive executive summaries, architectural diagrams, security vulnerabilities, risk matrices, and generated test suites in multiple formats.
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 4, maxWidth: 560, mx: 'auto', lineHeight: 1.6 }}>
+            Export comprehensive executive summaries, architectural dependency maps, OWASP security vulnerabilities, risk matrices, and generated test suites.
           </Typography>
 
           {!hasAnalysis && (
-            <Alert severity="info" sx={{ mb: 3, maxWidth: 540, mx: 'auto', borderRadius: 2 }}>
-              Run AI analysis from the Overview tab first to generate detailed metrics for your export.
+            <Alert severity="info" icon={<Sparkles size={18} color="#10B981" />} sx={{ mb: 3, maxWidth: 560, mx: 'auto', borderRadius: 2 }}>
+              Run AI analysis from the Overview tab first to populate your report with real multi-agent findings.
             </Alert>
           )}
 
           {error && (
-            <Alert severity="error" sx={{ mb: 3, maxWidth: 540, mx: 'auto', borderRadius: 2 }}>
+            <Alert severity="error" sx={{ mb: 3, maxWidth: 560, mx: 'auto', borderRadius: 2 }}>
               {error}
             </Alert>
           )}
 
-          <Grid container spacing={2} sx={{ maxWidth: 700, mx: 'auto' }}>
+          <Grid container spacing={2.5} sx={{ maxWidth: 740, mx: 'auto' }}>
             <Grid size={{ xs: 12, sm: 4 }}>
-              <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
-                <FileText size={28} color="#EF4444" style={{ marginBottom: 8 }} />
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  PDF Report
+              <Paper sx={{ p: 3, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
+                <FileText size={32} color="#EF4444" style={{ marginBottom: 10 }} />
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>
+                  PDF Executive Report
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-                  Print-ready Executive PDF
+                  Print-Ready OpenPDF Document
                 </Typography>
                 <Button
                   fullWidth
@@ -107,6 +107,7 @@ export function ReportTab({ projectId, projectName, hasAnalysis }: ReportTabProp
                   startIcon={<Download size={14} />}
                   onClick={() => handleDownload('pdf')}
                   disabled={isDownloading || !hasAnalysis}
+                  sx={{ fontWeight: 700 }}
                 >
                   Download PDF
                 </Button>
@@ -114,9 +115,9 @@ export function ReportTab({ projectId, projectName, hasAnalysis }: ReportTabProp
             </Grid>
 
             <Grid size={{ xs: 12, sm: 4 }}>
-              <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
-                <Code size={28} color="#6366F1" style={{ marginBottom: 8 }} />
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+              <Paper sx={{ p: 3, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
+                <Code size={32} color="#8B5CF6" style={{ marginBottom: 10 }} />
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>
                   Markdown Spec
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
@@ -129,6 +130,7 @@ export function ReportTab({ projectId, projectName, hasAnalysis }: ReportTabProp
                   startIcon={<Download size={14} />}
                   onClick={() => handleDownload('md')}
                   disabled={isDownloading || !hasAnalysis}
+                  sx={{ fontWeight: 700 }}
                 >
                   Download .MD
                 </Button>
@@ -136,10 +138,10 @@ export function ReportTab({ projectId, projectName, hasAnalysis }: ReportTabProp
             </Grid>
 
             <Grid size={{ xs: 12, sm: 4 }}>
-              <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider' }}>
-                <Globe size={28} color="#10B981" style={{ marginBottom: 8 }} />
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                  HTML Dashboard
+              <Paper sx={{ p: 3, textAlign: 'center', borderRadius: 3, border: '1px solid', borderColor: 'divider', bgcolor: 'action.hover' }}>
+                <Globe size={32} color="#10B981" style={{ marginBottom: 10 }} />
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>
+                  HTML Web Dashboard
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
                   Interactive Web Summary
@@ -151,6 +153,7 @@ export function ReportTab({ projectId, projectName, hasAnalysis }: ReportTabProp
                   startIcon={<Download size={14} />}
                   onClick={() => handleDownload('html')}
                   disabled={isDownloading || !hasAnalysis}
+                  sx={{ fontWeight: 700 }}
                 >
                   Download HTML
                 </Button>
