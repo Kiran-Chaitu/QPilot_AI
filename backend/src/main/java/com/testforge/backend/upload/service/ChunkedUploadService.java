@@ -135,7 +135,8 @@ public class ChunkedUploadService {
             projectService.processUploadedArchiveAsync(project.getId(), assembled);
 
             return new ProjectResponse(project.getId(), project.getName(), project.getDescription(), project.getSourceType(),
-                    project.getRepoUrl(), project.getPrimaryLanguage(), project.getFileCount(), project.getStatus(),
+                    project.getRepoUrl(), project.getTargetUrl(), project.getTargetApiUrl(),
+                    project.getPrimaryLanguage(), project.getFileCount(), project.getStatus(),
                     project.getSwaggerFilePath() != null, project.getProcessingError(), project.getCreatedAt(), project.getUpdatedAt());
         } catch (RuntimeException ex) {
             session.setStatus(UploadSessionStatus.FAILED);

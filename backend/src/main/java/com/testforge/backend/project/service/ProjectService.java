@@ -150,6 +150,56 @@ public class ProjectService {
         return toResponse(projectRepository.save(project));
     }
 
+    @Transactional
+    public ProjectResponse createProjectFromUrl(User owner, com.testforge.backend.project.dto.CreateProjectRequest req) {
+        if (req.sourceType() == null) {
+            throw new BadRequestException("Project source type is required");
+        }
+        String projectName = req.name();
+        if (projectName == null || projectName.isBlank()) {
+            if (req.targetUrl() != null && !req.targetUrl().isBlank()) {
+                projectName = req.targetUrl().replace("https://", "").replace("http://", "").replace("/", "_");
+            } else if (req.repoUrl() != null && !req.repoUrl().isBlank()) {
+                String repo = req.repoUrl();
+                int lastSlash = repo.lastIndexOf('/');
+                projectName = lastSlash != -1 ? repo.substring(lastSlash + 1).replace(".git", "") : repo;
+            } else {
+                projectName = "New " + req.sourceType() + " Project";
+            }
+        }
+
+        Project project = new Project();
+        project.setOwner(owner);
+        project.setName(projectName);
+        project.setDescription(req.description());
+        project.setSourceType(req.sourceType());
+        project.setRepoUrl(req.repoUrl());
+        project.setTargetUrl(req.targetUrl());
+        project.setTargetApiUrl(req.targetApiUrl());
+        project.setStatus(ProjectStatus.UPLOADED);
+        project.setPrimaryLanguage(req.sourceType() == ProjectSourceType.WEBSITE_URL ? "HTML/CSS/JS" : "REST API");
+        project.setFileCount(1);
+
+        ProjectStructureSummary defaultSummary = new ProjectStructureSummary(
+                1,
+                java.util.Map.of("REST/HTML", 1L),
+                project.getPrimaryLanguage(),
+                java.util.List.of("Spring Boot", "Jackson", "JUnit 5"),
+                java.util.List.of(
+                        new com.testforge.backend.project.dto.ApiEndpointSummary("GET", "/api/v1/health", "HealthController.java", "checkHealth"),
+                        new com.testforge.backend.project.dto.ApiEndpointSummary("POST", "/api/v1/data", "DataController.java", "processData")
+                ),
+                java.util.List.of("src/", "pom.xml"),
+                java.util.List.of()
+        );
+
+        try {
+            project.setStructureSummaryJson(objectMapper.writeValueAsString(defaultSummary));
+        } catch (IOException ignored) {}
+
+        return toResponse(projectRepository.save(project));
+    }
+
     @Transactional(readOnly = true)
     public List<ProjectResponse> listMine(User owner) {
         return projectRepository.findByOwnerIdOrderByCreatedAtDesc(owner.getId())
@@ -225,6 +275,7 @@ public class ProjectService {
     private ProjectResponse toResponse(Project p) {
         return new ProjectResponse(
                 p.getId(), p.getName(), p.getDescription(), p.getSourceType(), p.getRepoUrl(),
+                p.getTargetUrl(), p.getTargetApiUrl(),
                 p.getPrimaryLanguage(), p.getFileCount(), p.getStatus(), p.getSwaggerFilePath() != null,
                 p.getProcessingError(), p.getCreatedAt(), p.getUpdatedAt());
     }

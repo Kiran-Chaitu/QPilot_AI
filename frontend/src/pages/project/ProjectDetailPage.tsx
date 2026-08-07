@@ -1,8 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Alert, Box, CircularProgress, Stack, Tab, Tabs, Typography } from '@mui/material';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import IconButton from '@mui/material/IconButton';
+import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
+import {
+  Alert,
+  Box,
+  Breadcrumbs,
+  Button,
+  Card,
+  Chip,
+  CircularProgress,
+  IconButton,
+  Link,
+  Stack,
+  Tab,
+  Tabs,
+  Typography,
+} from '@mui/material';
+import {
+  ArrowLeft,
+  Play,
+  Globe,
+  Gauge,
+  ShieldCheck,
+  FileCode2,
+  FileText,
+  Layers,
+  TrendingUp,
+  ExternalLink,
+} from 'lucide-react';
 import { AppLayout } from '../../components/layout/AppLayout';
 import { StatusChip } from '../../components/common/StatusChip';
 import { getProjectDetail } from '../../api/projectApi';
@@ -15,8 +39,19 @@ import { GeneratedTestsTab } from './tabs/GeneratedTestsTab';
 import { SecurityReportTab } from './tabs/SecurityReportTab';
 import { RiskCoverageTab } from './tabs/RiskCoverageTab';
 import { ReportTab } from './tabs/ReportTab';
+import { WebsiteAuditorTab } from './tabs/WebsiteAuditorTab';
+import { LoadTesterTab } from './tabs/LoadTesterTab';
 
-const TABS = ['Overview', 'Generated Tests', 'Security Report', 'Risk & Coverage', 'Report'] as const;
+const TABS = [
+  { label: 'Overview & Stack', icon: <Layers size={16} /> },
+  { label: 'Generated Tests', icon: <FileCode2 size={16} /> },
+  { label: 'Synthetic Web Auditor', icon: <Globe size={16} /> },
+  { label: 'Safe Load Tester', icon: <Gauge size={16} /> },
+  { label: 'Security Audit', icon: <ShieldCheck size={16} /> },
+  { label: 'Risk & Coverage', icon: <TrendingUp size={16} /> },
+  { label: 'Executive Report', icon: <FileText size={16} /> },
+] as const;
+
 const EXTRACTING_POLL_INTERVAL_MS = 2000;
 
 export function ProjectDetailPage() {
@@ -39,8 +74,6 @@ export function ProjectDetailPage() {
     try {
       const data = await getProjectDetail(projectId);
       setDetail(data);
-      // Background extraction/analysis (chunked-upload projects) hasn't produced a structure
-      // summary yet; there's nothing meaningful to show in the AI Analysis panel until it does.
       if (data.project.status !== 'EXTRACTING') {
         try {
           const latest = await getLatestAnalysis(projectId);
@@ -60,8 +93,6 @@ export function ProjectDetailPage() {
     loadProject();
   }, [loadProject]);
 
-  // While a chunked-upload project is still being extracted/structurally analyzed in the
-  // background, poll for status changes instead of showing stale/empty tabs.
   useEffect(() => {
     if (detail?.project.status !== 'EXTRACTING') {
       return;
@@ -71,7 +102,7 @@ export function ProjectDetailPage() {
         const data = await getProjectDetail(projectId);
         setDetail(data);
       } catch {
-        // Transient polling errors are ignored; the next tick will retry.
+        // ignore polling retry
       }
     }, EXTRACTING_POLL_INTERVAL_MS);
     return () => {
@@ -99,8 +130,8 @@ export function ProjectDetailPage() {
   if (isLoading) {
     return (
       <AppLayout>
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-          <CircularProgress />
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 12 }}>
+          <CircularProgress size={40} />
         </Box>
       </AppLayout>
     );
@@ -109,32 +140,85 @@ export function ProjectDetailPage() {
   if (error || !detail) {
     return (
       <AppLayout>
-        <Alert severity="error">{error ?? 'Project not found.'}</Alert>
+        <Alert severity="error" sx={{ borderRadius: 2 }}>
+          {error ?? 'Project not found.'}
+        </Alert>
       </AppLayout>
     );
   }
 
-  const headerRow = (
-    <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-      <IconButton onClick={() => navigate('/dashboard')} size="small">
-        <ArrowBackIcon />
-      </IconButton>
-      <Typography variant="h4">{detail.project.name}</Typography>
-    </Stack>
+  const headerCard = (
+    <Card sx={{ p: 3, mb: 3, border: '1px solid rgba(255, 255, 255, 0.09)' }}>
+      {/* Breadcrumbs */}
+      <Breadcrumbs sx={{ mb: 2, fontSize: 13 }}>
+        <Link component={RouterLink} to="/dashboard" color="inherit" underline="hover">
+          Dashboard
+        </Link>
+        <Typography color="text.primary" sx={{ fontSize: 13, fontWeight: 700 }}>
+          {detail.project.name}
+        </Typography>
+      </Breadcrumbs>
+
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' } }}>
+        <Box>
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1, flexWrap: 'wrap' }}>
+            <IconButton onClick={() => navigate('/dashboard')} size="small" sx={{ border: '1px solid', borderColor: 'divider' }}>
+              <ArrowLeft size={18} />
+            </IconButton>
+            <Typography variant="h4" sx={{ fontWeight: 800 }}>
+              {detail.project.name}
+            </Typography>
+            <StatusChip status={detail.project.status} />
+            <Chip label={detail.project.sourceType} color="primary" variant="outlined" size="small" sx={{ fontWeight: 700 }} />
+          </Stack>
+
+          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 700 }}>
+            {detail.project.description || 'Enterprise repository for continuous automated multi-framework AI quality testing.'}
+          </Typography>
+
+          {(detail.project.targetUrl || detail.project.targetApiUrl) && (
+            <Stack direction="row" spacing={1} sx={{ mt: 1.5, alignItems: 'center' }}>
+              <Globe size={14} color="#6366F1" />
+              <Typography variant="caption" color="text.secondary">
+                Target:
+              </Typography>
+              <Typography variant="caption" sx={{ fontFamily: 'JetBrains Mono', fontWeight: 600, color: 'primary.main' }}>
+                {detail.project.targetUrl || detail.project.targetApiUrl}
+              </Typography>
+              <ExternalLink size={12} style={{ opacity: 0.6 }} />
+            </Stack>
+          )}
+        </Box>
+
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+          <Button
+            variant="contained"
+            color="primary"
+            size="large"
+            startIcon={isAnalyzing ? <CircularProgress size={16} color="inherit" /> : <Play size={18} />}
+            onClick={handleAnalyze}
+            disabled={isAnalyzing}
+            sx={{ fontWeight: 700, borderRadius: 2, px: 3 }}
+          >
+            {isAnalyzing ? 'Running AI Agents…' : analysis ? 'Re-Run AI Multi-Agent Audit' : 'Run Full Quality Audit'}
+          </Button>
+        </Stack>
+      </Stack>
+    </Card>
   );
 
-  // Still extracting/structurally analyzing in the background (see the chunked-upload pipeline):
-  // there is no structure summary yet, so show a processing state instead of the tabs (which
-  // expect a non-null structure) rather than crash on missing data.
   if (detail.project.status === 'EXTRACTING' || detail.structure === null) {
     return (
       <AppLayout>
-        {headerRow}
-        <Stack spacing={2} sx={{ py: 8, alignItems: 'center' }}>
+        {headerCard}
+        <Stack spacing={2} sx={{ py: 8, alignItems: 'center', textAlign: 'center' }}>
           <StatusChip status={detail.project.status} />
-          <CircularProgress size={32} />
-          <Typography variant="body1" color="text.secondary">
-            Extracting archive and analyzing project structure… this page will update automatically.
+          <CircularProgress size={36} />
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Extracting Archive & Analyzing Structure…
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 460 }}>
+            QPilot AI agents are indexing files, parsing annotations & building the project RAG graph. This view updates automatically.
           </Typography>
         </Stack>
       </AppLayout>
@@ -144,8 +228,8 @@ export function ProjectDetailPage() {
   if (detail.project.status === 'FAILED' && detail.project.processingError) {
     return (
       <AppLayout>
-        {headerRow}
-        <Alert severity="error" sx={{ mt: 2 }}>
+        {headerCard}
+        <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>
           Processing failed: {detail.project.processingError}
         </Alert>
       </AppLayout>
@@ -154,29 +238,47 @@ export function ProjectDetailPage() {
 
   return (
     <AppLayout>
-      {headerRow}
-      {detail.project.description && (
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
-          {detail.project.description}
-        </Typography>
-      )}
+      {headerCard}
 
       {analysisError && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setAnalysisError(null)}>
+        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }} onClose={() => setAnalysisError(null)}>
           {analysisError}
         </Alert>
       )}
 
-      <Tabs
-        value={activeTab}
-        onChange={(_, value) => setActiveTab(value)}
-        sx={{ mb: 3, borderBottom: '1px solid', borderColor: 'divider' }}
-      >
-        {TABS.map((label) => (
-          <Tab key={label} label={label} />
-        ))}
-      </Tabs>
+      {/* Tabs Menu */}
+      <Box sx={{ borderBottom: '1px solid', borderColor: 'divider', mb: 3 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, value) => setActiveTab(value)}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{
+            '& .MuiTab-root': {
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              py: 1.5,
+              px: 2.5,
+              transition: 'all 0.2s ease',
+            },
+            '& .Mui-selected': {
+              fontWeight: 800,
+              color: 'primary.main',
+            },
+          }}
+        >
+          {TABS.map((t) => (
+            <Tab
+              key={t.label}
+              icon={t.icon}
+              iconPosition="start"
+              label={t.label}
+            />
+          ))}
+        </Tabs>
+      </Box>
 
+      {/* Tab Panels */}
       {activeTab === 0 && (
         <OverviewTab
           detail={{ project: detail.project, structure: detail.structure }}
@@ -185,10 +287,18 @@ export function ProjectDetailPage() {
           isAnalyzing={isAnalyzing}
         />
       )}
+
       {activeTab === 1 && <GeneratedTestsTab tests={analysis?.tests ?? []} />}
-      {activeTab === 2 && <SecurityReportTab findings={analysis?.securityFindings ?? []} />}
-      {activeTab === 3 && <RiskCoverageTab risk={analysis?.risk} />}
-      {activeTab === 4 && (
+
+      {activeTab === 2 && <WebsiteAuditorTab defaultUrl={detail.project.targetUrl} />}
+
+      {activeTab === 3 && <LoadTesterTab defaultApiUrl={detail.project.targetApiUrl} />}
+
+      {activeTab === 4 && <SecurityReportTab findings={analysis?.securityFindings ?? []} />}
+
+      {activeTab === 5 && <RiskCoverageTab risk={analysis?.risk} />}
+
+      {activeTab === 6 && (
         <ReportTab projectId={projectId} projectName={detail.project.name} hasAnalysis={analysis !== null} />
       )}
     </AppLayout>

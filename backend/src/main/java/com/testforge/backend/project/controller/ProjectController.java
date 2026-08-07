@@ -37,6 +37,14 @@ public class ProjectController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Project uploaded and analyzed", response));
     }
 
+    @PostMapping("/create")
+    public ResponseEntity<ApiResponse<ProjectResponse>> create(
+            @AuthenticationPrincipal User user,
+            @RequestBody @jakarta.validation.Valid com.testforge.backend.project.dto.CreateProjectRequest req) {
+        ProjectResponse response = projectService.createProjectFromUrl(user, req);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Project created successfully", response));
+    }
+
     @PostMapping(value = "/{id}/swagger", consumes = "multipart/form-data")
     public ResponseEntity<ApiResponse<ProjectResponse>> uploadSwagger(
             @AuthenticationPrincipal User user,

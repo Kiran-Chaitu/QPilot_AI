@@ -31,3 +31,17 @@ export async function getProjectDetail(projectId: number): Promise<ProjectDetail
   const { data } = await httpClient.get<ApiResponse<ProjectDetailResponse>>(`/projects/${projectId}`);
   return data.data as ProjectDetailResponse;
 }
+
+export interface CreateProjectPayload {
+  name: string;
+  description?: string;
+  sourceType: 'ZIP' | 'GIT_URL' | 'OPENAPI' | 'POSTMAN' | 'WEBSITE_URL' | 'API_URL';
+  repoUrl?: string;
+  targetUrl?: string;
+  targetApiUrl?: string;
+}
+
+export async function createProjectFromUrl(payload: CreateProjectPayload): Promise<ProjectResponse> {
+  const { data } = await httpClient.post<ApiResponse<ProjectResponse>>('/projects/create', payload);
+  return data.data as ProjectResponse;
+}

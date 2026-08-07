@@ -2,22 +2,23 @@ import { createTheme } from '@mui/material/styles';
 
 export const theme = createTheme({
   palette: {
-    mode: 'light',
+    mode: 'dark',
     primary: {
-      main: '#1e3c72',
+      main: '#10B981',
     },
     secondary: {
-      main: '#2a7f62',
+      main: '#A855F7',
     },
     background: {
-      default: '#f4f6f9',
+      default: '#09090B',
+      paper: '#121215',
     },
   },
   shape: {
     borderRadius: 10,
   },
   typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    fontFamily: '"Plus Jakarta Sans", "Inter", "Roboto", "Helvetica", "Arial", sans-serif',
     h4: { fontWeight: 700 },
     h5: { fontWeight: 700 },
     h6: { fontWeight: 600 },

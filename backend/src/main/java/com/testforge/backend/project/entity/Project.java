@@ -35,6 +35,12 @@ public class Project {
 
     private String repoUrl;
 
+    /** Running Website URL for Synthetic Audit / Load Testing */
+    private String targetUrl;
+
+    /** Running API Base URL for API Testing / Load Testing */
+    private String targetApiUrl;
+
     /** Absolute path to the extracted project source on disk. */
     private String storagePath;
 

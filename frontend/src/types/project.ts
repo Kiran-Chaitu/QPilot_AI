@@ -1,4 +1,4 @@
-export type ProjectSourceType = 'ZIP' | 'GIT_URL';
+export type ProjectSourceType = 'ZIP' | 'GIT_URL' | 'OPENAPI' | 'POSTMAN' | 'WEBSITE_URL' | 'API_URL';
 export type ProjectStatus = 'EXTRACTING' | 'UPLOADED' | 'ANALYZING' | 'ANALYZED' | 'FAILED';
 
 export interface ProjectResponse {
@@ -7,6 +7,8 @@ export interface ProjectResponse {
   description?: string;
   sourceType: ProjectSourceType;
   repoUrl?: string;
+  targetUrl?: string;
+  targetApiUrl?: string;
   primaryLanguage?: string;
   fileCount?: number;
   status: ProjectStatus;

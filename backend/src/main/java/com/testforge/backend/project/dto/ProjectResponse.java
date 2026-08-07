@@ -11,6 +11,8 @@ public record ProjectResponse(
         String description,
         ProjectSourceType sourceType,
         String repoUrl,
+        String targetUrl,
+        String targetApiUrl,
         String primaryLanguage,
         Integer fileCount,
         ProjectStatus status,
