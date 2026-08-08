@@ -1,6 +1,7 @@
 package com.testforge.backend.loadtest.dto;
 
 import java.util.List;
+import java.util.Map;
 
 public record LoadTestResponse(
         String targetUrl,
@@ -13,8 +14,14 @@ public record LoadTestResponse(
         long p90Ms,
         long p95Ms,
         long p99Ms,
+        long minLatencyMs,
+        long maxLatencyMs,
+        int totalRequests,
+        int successfulRequests,
+        int failedRequests,
         double successRatePercent,
         double errorRatePercent,
+        Map<Integer, Integer> statusCodeDistribution,
         String rateLimitStatus,
         List<RateLimitPolicyItem> rateLimitPolicies,
         String k6Script,

@@ -4,6 +4,7 @@ public record LoadTestRequest(
         String targetUrl,
         int vus,
         int durationSeconds,
-        int rampUpSeconds
+        int rampUpSeconds,
+        String httpMethod
 ) {
 }

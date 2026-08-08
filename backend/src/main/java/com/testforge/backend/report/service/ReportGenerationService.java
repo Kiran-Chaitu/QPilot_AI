@@ -240,6 +240,167 @@ public class ReportGenerationService {
         };
     }
 
+    public String generateMarkdown(User user, Long projectId) {
+        Project project = projectService.getOwnedProject(user, projectId);
+        AnalysisResultResponse result = analysisService.getLatestResult(user, projectId);
+        StringBuilder sb = new StringBuilder();
+
+        sb.append("# QPilot AI — Quality & Testing Executive Report\n\n");
+        sb.append("**Project Name:** ").append(project.getName()).append("\n");
+        sb.append("**Primary Language:** ").append(nullSafe(project.getPrimaryLanguage())).append("\n");
+        sb.append("**Files Analyzed:** ").append(project.getFileCount() != null ? project.getFileCount() : "n/a").append("\n");
+        sb.append("**Status:** ").append(project.getStatus().name()).append("\n");
+        sb.append("**AI Provider:** ").append(result.run().aiProvider()).append("\n");
+        sb.append("**Generated:** ").append(java.time.Instant.now()).append("\n\n");
+
+        sb.append("## Architectural Summary\n\n");
+        sb.append(nullSafe(result.run().codeSummary())).append("\n\n");
+
+        if (result.run().keyResponsibilities() != null && !result.run().keyResponsibilities().isEmpty()) {
+            sb.append("### Key Responsibilities\n\n");
+            for (String r : result.run().keyResponsibilities()) {
+                sb.append("- ").append(r).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        if (result.run().notableObservations() != null && !result.run().notableObservations().isEmpty()) {
+            sb.append("### Notable Observations\n\n");
+            for (String o : result.run().notableObservations()) {
+                sb.append("- ").append(o).append("\n");
+            }
+            sb.append("\n");
+        }
+
+        // Risk Section
+        RiskAssessmentResponse risk = result.risk();
+        if (risk != null) {
+            sb.append("## Risk & Coverage\n\n");
+            sb.append("**Risk Score:** ").append(risk.score()).append(" / 100\n");
+            sb.append("**Estimated Coverage:** ").append(risk.coverageEstimatePercent()).append("%\n\n");
+            if (!risk.reasons().isEmpty()) {
+                sb.append("### Risk Reasons\n\n");
+                for (String r : risk.reasons()) sb.append("- ").append(r).append("\n");
+                sb.append("\n");
+            }
+            if (!risk.coverageGaps().isEmpty()) {
+                sb.append("### Coverage Gaps\n\n");
+                for (String g : risk.coverageGaps()) sb.append("- ").append(g).append("\n");
+                sb.append("\n");
+            }
+        }
+
+        // Tests Section
+        List<GeneratedTestResponse> tests = result.tests();
+        sb.append("## Generated Tests (").append(tests.size()).append(")\n\n");
+        if (tests.isEmpty()) {
+            sb.append("No tests were generated.\n\n");
+        } else {
+            sb.append("| Type | Title | Framework | Target |\n");
+            sb.append("|------|-------|-----------|--------|\n");
+            for (GeneratedTestResponse t : tests) {
+                sb.append("| ").append(t.type().name())
+                  .append(" | ").append(nullSafe(t.title()))
+                  .append(" | ").append(nullSafe(t.framework()))
+                  .append(" | ").append(nullSafe(t.targetName())).append(" |\n");
+            }
+            sb.append("\n");
+        }
+
+        // Security Section
+        List<SecurityFindingResponse> findings = result.securityFindings();
+        sb.append("## Security Findings (").append(findings.size()).append(")\n\n");
+        if (findings.isEmpty()) {
+            sb.append("No security findings were reported.\n");
+        } else {
+            sb.append("| Category | Severity | Description | Recommendation |\n");
+            sb.append("|----------|----------|-------------|----------------|\n");
+            for (SecurityFindingResponse f : findings) {
+                sb.append("| ").append(nullSafe(f.category()))
+                  .append(" | ").append(f.severity().name())
+                  .append(" | ").append(nullSafe(f.description()))
+                  .append(" | ").append(nullSafe(f.recommendation())).append(" |\n");
+            }
+        }
+
+        return sb.toString();
+    }
+
+    public String generateHtml(User user, Long projectId) {
+        String md = generateMarkdown(user, projectId);
+        // Convert markdown to simple HTML
+        StringBuilder html = new StringBuilder();
+        html.append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
+        html.append("<meta charset=\"UTF-8\">\n");
+        html.append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
+        html.append("<title>QPilot AI Quality Report</title>\n");
+        html.append("<style>\n");
+        html.append("  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; ");
+        html.append("         max-width: 960px; margin: 0 auto; padding: 40px 20px; ");
+        html.append("         background: #0f172a; color: #e2e8f0; line-height: 1.6; }\n");
+        html.append("  h1 { color: #10b981; border-bottom: 2px solid #1e3a5f; padding-bottom: 12px; }\n");
+        html.append("  h2 { color: #6366f1; margin-top: 32px; }\n");
+        html.append("  h3 { color: #f59e0b; }\n");
+        html.append("  table { border-collapse: collapse; width: 100%; margin: 16px 0; }\n");
+        html.append("  th { background: #1e3a5f; color: white; padding: 10px 12px; text-align: left; }\n");
+        html.append("  td { padding: 8px 12px; border-bottom: 1px solid #334155; }\n");
+        html.append("  tr:hover td { background: rgba(99, 102, 241, 0.08); }\n");
+        html.append("  strong { color: #10b981; }\n");
+        html.append("  code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }\n");
+        html.append("  ul { padding-left: 24px; }\n");
+        html.append("  li { margin: 4px 0; }\n");
+        html.append("</style>\n");
+        html.append("</head>\n<body>\n");
+
+        // Simple markdown-to-html conversion
+        for (String line : md.split("\n")) {
+            if (line.startsWith("# ")) {
+                html.append("<h1>").append(escapeHtml(line.substring(2))).append("</h1>\n");
+            } else if (line.startsWith("## ")) {
+                html.append("<h2>").append(escapeHtml(line.substring(3))).append("</h2>\n");
+            } else if (line.startsWith("### ")) {
+                html.append("<h3>").append(escapeHtml(line.substring(4))).append("</h3>\n");
+            } else if (line.startsWith("| ") && line.contains("---")) {
+                // Skip table separator rows
+            } else if (line.startsWith("| ")) {
+                // Table row
+                String[] cells = line.split("\\|");
+                boolean isHeader = false;
+                // Peek if next conceptual row is separator (we handle inline)
+                html.append("<tr>");
+                for (int i = 1; i < cells.length; i++) {
+                    String cell = cells[i].trim();
+                    if (!cell.isEmpty()) {
+                        html.append("<td>").append(escapeHtml(cell)).append("</td>");
+                    }
+                }
+                html.append("</tr>\n");
+            } else if (line.startsWith("- ")) {
+                html.append("<li>").append(processInlineMarkdown(line.substring(2))).append("</li>\n");
+            } else if (line.startsWith("**")) {
+                html.append("<p>").append(processInlineMarkdown(line)).append("</p>\n");
+            } else if (!line.isBlank()) {
+                html.append("<p>").append(processInlineMarkdown(line)).append("</p>\n");
+            }
+        }
+
+        html.append("</body>\n</html>\n");
+        return html.toString();
+    }
+
+    private String escapeHtml(String s) {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    private String processInlineMarkdown(String text) {
+        String escaped = escapeHtml(text);
+        // Bold: **text**
+        escaped = escaped.replaceAll("\\*\\*([^*]+)\\*\\*", "<strong>$1</strong>");
+        // Code: `text`
+        escaped = escaped.replaceAll("`([^`]+)`", "<code>$1</code>");
+        return escaped;
+    }
+
     private String nullSafe(String value) {
         return value == null || value.isBlank() ? "n/a" : value;
     }

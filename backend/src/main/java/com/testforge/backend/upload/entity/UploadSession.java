@@ -2,22 +2,11 @@ package com.testforge.backend.upload.entity;
 
 import com.testforge.backend.auth.entity.User;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.Instant;
 
-/**
- * Tracks one client-initiated chunked upload from init through assembly. The chunk part-files on
- * disk (see FileStorageService) are the source of truth for *which* chunks have arrived; this
- * entity tracks session-level metadata, ownership and lifecycle status.
- */
 @Entity
 @Table(name = "upload_sessions")
-@Getter
-@Setter
-@NoArgsConstructor
 public class UploadSession {
 
     @Id
@@ -67,4 +56,49 @@ public class UploadSession {
     public void onUpdate() {
         this.updatedAt = Instant.now();
     }
+
+    public UploadSession() {
+    }
+
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+
+    public User getOwner() { return owner; }
+    public void setOwner(User owner) { this.owner = owner; }
+
+    public String getOriginalFileName() { return originalFileName; }
+    public void setOriginalFileName(String originalFileName) { this.originalFileName = originalFileName; }
+
+    public long getTotalSizeBytes() { return totalSizeBytes; }
+    public void setTotalSizeBytes(long totalSizeBytes) { this.totalSizeBytes = totalSizeBytes; }
+
+    public long getChunkSizeBytes() { return chunkSizeBytes; }
+    public void setChunkSizeBytes(long chunkSizeBytes) { this.chunkSizeBytes = chunkSizeBytes; }
+
+    public int getTotalChunks() { return totalChunks; }
+    public void setTotalChunks(int totalChunks) { this.totalChunks = totalChunks; }
+
+    public UploadSessionStatus getStatus() { return status; }
+    public void setStatus(UploadSessionStatus status) { this.status = status; }
+
+    public String getProjectName() { return projectName; }
+    public void setProjectName(String projectName) { this.projectName = projectName; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public Long getResultProjectId() { return resultProjectId; }
+    public void setResultProjectId(Long resultProjectId) { this.resultProjectId = resultProjectId; }
+
+    public String getErrorMessage() { return errorMessage; }
+    public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    public Instant getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
+    public Instant getExpiresAt() { return expiresAt; }
+    public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
 }

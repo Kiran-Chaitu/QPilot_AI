@@ -225,8 +225,14 @@ export function RegisterPage() {
                     ),
                     endAdornment: (
                       <InputAdornment position="end">
-                        <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
-                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        <IconButton
+                          type="button"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          edge="end"
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          tabIndex={-1}
+                        >
+                          {showPassword ? <EyeOff size={18} color="#6366F1" /> : <Eye size={18} />}
                         </IconButton>
                       </InputAdornment>
                     ),

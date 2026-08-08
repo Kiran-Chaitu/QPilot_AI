@@ -2,17 +2,11 @@ package com.testforge.backend.analysis.entity;
 
 import com.testforge.backend.project.entity.Project;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.Instant;
 
 @Entity
 @Table(name = "generated_tests")
-@Getter
-@Setter
-@NoArgsConstructor
 public class GeneratedTest {
 
     @Id
@@ -48,4 +42,37 @@ public class GeneratedTest {
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
+
+    public GeneratedTest() {
+    }
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public Project getProject() { return project; }
+    public void setProject(Project project) { this.project = project; }
+
+    public AnalysisRun getAnalysisRun() { return analysisRun; }
+    public void setAnalysisRun(AnalysisRun analysisRun) { this.analysisRun = analysisRun; }
+
+    public TestType getType() { return type; }
+    public void setType(TestType type) { this.type = type; }
+
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+
+    public String getTargetName() { return targetName; }
+    public void setTargetName(String targetName) { this.targetName = targetName; }
+
+    public String getFramework() { return framework; }
+    public void setFramework(String framework) { this.framework = framework; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public String getCode() { return code; }
+    public void setCode(String code) { this.code = code; }
+
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

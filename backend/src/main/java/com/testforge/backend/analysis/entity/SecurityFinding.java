@@ -2,17 +2,11 @@ package com.testforge.backend.analysis.entity;
 
 import com.testforge.backend.project.entity.Project;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.Instant;
 
 @Entity
 @Table(name = "security_findings")
-@Getter
-@Setter
-@NoArgsConstructor
 public class SecurityFinding {
 
     @Id
@@ -46,4 +40,34 @@ public class SecurityFinding {
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
+
+    public SecurityFinding() {
+    }
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public Project getProject() { return project; }
+    public void setProject(Project project) { this.project = project; }
+
+    public AnalysisRun getAnalysisRun() { return analysisRun; }
+    public void setAnalysisRun(AnalysisRun analysisRun) { this.analysisRun = analysisRun; }
+
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+
+    public Severity getSeverity() { return severity; }
+    public void setSeverity(Severity severity) { this.severity = severity; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public String getRecommendation() { return recommendation; }
+    public void setRecommendation(String recommendation) { this.recommendation = recommendation; }
+
+    public String getLocation() { return location; }
+    public void setLocation(String location) { this.location = location; }
+
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

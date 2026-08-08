@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 
 @RestController
@@ -40,5 +41,27 @@ public class ReportController {
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .body(resource);
+    }
+
+    @GetMapping("/download/md")
+    public ResponseEntity<byte[]> downloadMarkdown(@AuthenticationPrincipal User user, @PathVariable Long id) {
+        String markdown = reportGenerationService.generateMarkdown(user, id);
+        String filename = "QPilot-AI-Report-" + id + ".md";
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/markdown; charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(filename).build().toString())
+                .body(markdown.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @GetMapping("/download/html")
+    public ResponseEntity<byte[]> downloadHtml(@AuthenticationPrincipal User user, @PathVariable Long id) {
+        String html = reportGenerationService.generateHtml(user, id);
+        String filename = "QPilot-AI-Report-" + id + ".html";
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_HTML)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(filename).build().toString())
+                .body(html.getBytes(StandardCharsets.UTF_8));
     }
 }

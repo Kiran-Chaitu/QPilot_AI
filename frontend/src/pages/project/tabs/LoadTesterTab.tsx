@@ -5,9 +5,13 @@ import {
   Card,
   Chip,
   CircularProgress,
+  FormControl,
   Grid,
+  InputLabel,
   LinearProgress,
+  MenuItem,
   Paper,
+  Select,
   Slider,
   Stack,
   Table,
@@ -26,31 +30,53 @@ import {
   Copy,
   Check,
   ShieldCheck,
+  BarChart3,
+  Timer,
 } from 'lucide-react';
 import { runLoadTest, type LoadTestResponse } from '../../../api/loadTestApi';
 import { useToast } from '../../../context/ToastContext';
 
 export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
   const { showSuccess, showError } = useToast();
-  const [targetUrl, setTargetUrl] = useState(defaultApiUrl || 'https://api.example.com/v1/health');
+  const [targetUrl, setTargetUrl] = useState(defaultApiUrl || '');
   const [vus, setVus] = useState<number>(50);
   const [duration, setDuration] = useState<number>(30);
   const [rampUp] = useState<number>(5);
+  const [httpMethod, setHttpMethod] = useState('GET');
 
   const [isRunning, setIsRunning] = useState(false);
   const [loadResult, setLoadResult] = useState<LoadTestResponse | null>(null);
   const [copiedK6, setCopiedK6] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   const handleStartLoadTest = async () => {
     if (!targetUrl) return;
     setIsRunning(true);
+    setProgress(0);
+    setLoadResult(null);
+
+    // Simulate progress bar since the backend takes time for real load testing
+    const progressInterval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 90) return prev;
+        // Progress accelerates based on expected duration
+        const increment = Math.max(0.5, 80 / (duration + rampUp));
+        return Math.min(prev + increment, 90);
+      });
+    }, 1000);
+
     try {
-      const data = await runLoadTest(targetUrl, vus, duration, rampUp);
+      const data = await runLoadTest(targetUrl, vus, duration, rampUp, httpMethod);
       setLoadResult(data);
-      showSuccess(`Load test benchmark completed for ${targetUrl}!`);
+      setProgress(100);
+      showSuccess(
+        `Load test completed! ${data.totalRequests} requests sent, ` +
+        `${data.successfulRequests} successful, avg latency ${data.avgLatencyMs}ms`
+      );
     } catch {
-      showError('Load test simulation failed. Check endpoint accessibility.');
+      showError('Load test failed. Check endpoint accessibility.');
     } finally {
+      clearInterval(progressInterval);
       setIsRunning(false);
     }
   };
@@ -77,6 +103,13 @@ export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
     showSuccess('Downloaded k6 script!');
   };
 
+  const getStatusCodeColor = (code: number): 'success' | 'warning' | 'error' | 'default' => {
+    if (code >= 200 && code < 300) return 'success';
+    if (code >= 300 && code < 400) return 'warning';
+    if (code >= 400) return 'error';
+    return 'default';
+  };
+
   return (
     <Stack spacing={3}>
       {/* Configuration Header */}
@@ -91,16 +124,18 @@ export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
           <Gauge size={24} color="#F59E0B" />
           <Typography variant="h6" sx={{ fontWeight: 800 }}>
-            Safe Load & Stress Testing Engine
+            Real Load & Stress Testing Engine
           </Typography>
-          <Chip label="Dynamic Benchmark Engine" color="warning" size="small" variant="outlined" />
+          <Chip label="Live HTTP Benchmark" color="warning" size="small" variant="outlined" />
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Configure virtual users (VUs), test durations, and target endpoints. Evaluates throughput, tail latencies (p95/p99), rate limit headers, and generates executable k6 scripts.
+          Sends real concurrent HTTP requests to your endpoint using virtual threads. Measures actual throughput,
+          real latency percentiles (p50/p90/p95/p99), detects genuine rate limit headers (429, X-RateLimit-*),
+          and generates executable k6 scripts based on observed performance.
         </Typography>
 
         <Grid container spacing={3}>
-          <Grid size={{ xs: 12, md: 5 }}>
+          <Grid size={{ xs: 12, md: 4 }}>
             <TextField
               label="Target Endpoint URL"
               fullWidth
@@ -108,7 +143,25 @@ export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
               value={targetUrl}
               onChange={(e) => setTargetUrl(e.target.value)}
               disabled={isRunning}
+              placeholder="https://api.example.com/v1/health"
             />
+          </Grid>
+          <Grid size={{ xs: 6, sm: 3, md: 1.5 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Method</InputLabel>
+              <Select
+                value={httpMethod}
+                label="Method"
+                onChange={(e) => setHttpMethod(e.target.value)}
+                disabled={isRunning}
+              >
+                <MenuItem value="GET">GET</MenuItem>
+                <MenuItem value="HEAD">HEAD</MenuItem>
+                <MenuItem value="POST">POST</MenuItem>
+                <MenuItem value="PUT">PUT</MenuItem>
+                <MenuItem value="DELETE">DELETE</MenuItem>
+              </Select>
+            </FormControl>
           </Grid>
           <Grid size={{ xs: 12, sm: 4, md: 2.5 }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
@@ -123,7 +176,7 @@ export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
               disabled={isRunning}
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 4, md: 2.5 }}>
+          <Grid size={{ xs: 12, sm: 4, md: 2 }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
               DURATION: {duration}s (Ramp: {rampUp}s)
             </Typography>
@@ -131,8 +184,8 @@ export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
               value={duration}
               onChange={(_e, v) => setDuration(v as number)}
               min={10}
-              max={300}
-              step={10}
+              max={120}
+              step={5}
               disabled={isRunning}
             />
           </Grid>
@@ -147,16 +200,22 @@ export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
               disabled={isRunning || !targetUrl}
               sx={{ fontWeight: 700, borderRadius: 2 }}
             >
-              {isRunning ? 'Benchmarking…' : 'Run Load Test'}
+              {isRunning ? 'Testing…' : 'Run Load Test'}
             </Button>
           </Grid>
         </Grid>
 
         {isRunning && (
           <Box sx={{ mt: 3 }}>
-            <LinearProgress color="warning" sx={{ height: 6, borderRadius: 3 }} />
+            <LinearProgress
+              variant="determinate"
+              value={progress}
+              color="warning"
+              sx={{ height: 6, borderRadius: 3 }}
+            />
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              Ramping up to {vus} VUs over {rampUp}s... Measuring latency percentiles & rate limit header responses...
+              Sending real concurrent {httpMethod} requests to {targetUrl} — Ramping up to {vus} VUs
+              over {rampUp}s, sustaining for {duration}s... ({Math.round(progress)}%)
             </Typography>
           </Box>
         )}
@@ -165,8 +224,9 @@ export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
       {/* Execution Results */}
       {loadResult && (
         <>
+          {/* Core Metrics */}
           <Grid container spacing={2.5}>
-            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
                   THROUGHPUT
@@ -178,7 +238,7 @@ export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
               </Paper>
             </Grid>
 
-            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
                   AVG LATENCY
@@ -186,45 +246,97 @@ export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
                 <Typography variant="h3" sx={{ fontWeight: 800, color: 'success.main', mt: 0.5 }}>
                   {loadResult.avgLatencyMs} ms
                 </Typography>
-                <Typography variant="caption" color="text.secondary">Median Response</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Min: {loadResult.minLatencyMs}ms / Max: {loadResult.maxLatencyMs}ms
+                </Typography>
               </Paper>
             </Grid>
 
-            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                  95TH PERCENTILE (P95)
+                  P95 / P99 LATENCY
                 </Typography>
                 <Typography variant="h3" sx={{ fontWeight: 800, color: 'warning.main', mt: 0.5 }}>
                   {loadResult.p95Ms} ms
                 </Typography>
-                <Typography variant="caption" color="text.secondary">p99: {loadResult.p99Ms} ms</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  p50: {loadResult.p50Ms}ms / p90: {loadResult.p90Ms}ms / p99: {loadResult.p99Ms}ms
+                </Typography>
               </Paper>
             </Grid>
 
-            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+              <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  TOTAL REQUESTS
+                </Typography>
+                <Typography variant="h3" sx={{ fontWeight: 800, color: 'info.main', mt: 0.5 }}>
+                  {loadResult.totalRequests}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  <span style={{ color: '#10B981' }}>{loadResult.successfulRequests} OK</span>
+                  {' / '}
+                  <span style={{ color: '#EF4444' }}>{loadResult.failedRequests} Failed</span>
+                </Typography>
+              </Paper>
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
                   SUCCESS RATE
                 </Typography>
-                <Typography variant="h3" sx={{ fontWeight: 800, color: 'success.main', mt: 0.5 }}>
+                <Typography variant="h3" sx={{ fontWeight: 800, color: loadResult.successRatePercent >= 95 ? 'success.main' : loadResult.successRatePercent >= 80 ? 'warning.main' : 'error.main', mt: 0.5 }}>
                   {loadResult.successRatePercent.toFixed(1)}%
                 </Typography>
-                <Typography variant="caption" color="text.secondary">Error: {loadResult.errorRatePercent.toFixed(1)}%</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Error: {loadResult.errorRatePercent.toFixed(1)}%
+                </Typography>
               </Paper>
             </Grid>
 
-            <Grid size={{ xs: 12, sm: 6, md: 2.4 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
                   RATE LIMITING
                 </Typography>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: 'info.main', mt: 1.5 }}>
+                <Typography variant="body1" sx={{ fontWeight: 800, color: loadResult.rateLimitStatus.includes('429') ? 'error.main' : 'info.main', mt: 1.5 }}>
                   {loadResult.rateLimitStatus}
                 </Typography>
               </Paper>
             </Grid>
           </Grid>
+
+          {/* Status Code Distribution */}
+          {loadResult.statusCodeDistribution && Object.keys(loadResult.statusCodeDistribution).length > 0 && (
+            <Card sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <BarChart3 size={20} color="#6366F1" />
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  Response Status Code Distribution
+                </Typography>
+              </Box>
+              <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', gap: 1 }}>
+                {Object.entries(loadResult.statusCodeDistribution).map(([code, count]) => (
+                  <Chip
+                    key={code}
+                    label={`HTTP ${code}: ${count} requests`}
+                    color={getStatusCodeColor(Number(code))}
+                    variant="outlined"
+                    sx={{ fontWeight: 700, fontSize: '0.82rem' }}
+                  />
+                ))}
+              </Stack>
+              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Timer size={14} color="#A1A1AA" />
+                <Typography variant="caption" color="text.secondary">
+                  Test duration: {loadResult.durationSeconds}s with {loadResult.vus} virtual users
+                  (ramp-up: {loadResult.rampUpSeconds}s)
+                </Typography>
+              </Box>
+            </Card>
+          )}
 
           {/* Generated Scripts Section */}
           <Grid container spacing={3}>
@@ -281,14 +393,21 @@ export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
                   <ShieldCheck size={20} color="#10B981" />
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    Rate Limit Policy Audit Results
+                    Rate Limit Detection Results
                   </Typography>
+                  <Chip
+                    label="Real Header Analysis"
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                    sx={{ fontSize: '0.68rem' }}
+                  />
                 </Box>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>Policy Name</TableCell>
-                      <TableCell>Evaluated Value</TableCell>
+                      <TableCell>Policy / Header</TableCell>
+                      <TableCell>Observed Value</TableCell>
                       <TableCell>Status</TableCell>
                     </TableRow>
                   </TableHead>
@@ -298,7 +417,18 @@ export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
                         <TableCell sx={{ fontWeight: 600 }}>{r.policy}</TableCell>
                         <TableCell><code style={{ fontFamily: 'JetBrains Mono', fontSize: 11 }}>{r.value}</code></TableCell>
                         <TableCell>
-                          <Chip label={r.status} color="success" size="small" sx={{ height: 20, fontSize: 11 }} />
+                          <Chip
+                            label={r.status}
+                            color={
+                              r.status.includes('Active') || r.status.includes('Detected')
+                                ? 'success'
+                                : r.status.includes('Not')
+                                ? 'default'
+                                : 'warning'
+                            }
+                            size="small"
+                            sx={{ height: 20, fontSize: 11 }}
+                          />
                         </TableCell>
                       </TableRow>
                     ))}

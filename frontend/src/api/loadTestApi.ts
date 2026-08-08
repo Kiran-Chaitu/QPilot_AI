@@ -18,8 +18,14 @@ export interface LoadTestResponse {
   p90Ms: number;
   p95Ms: number;
   p99Ms: number;
+  minLatencyMs: number;
+  maxLatencyMs: number;
+  totalRequests: number;
+  successfulRequests: number;
+  failedRequests: number;
   successRatePercent: number;
   errorRatePercent: number;
+  statusCodeDistribution: Record<number, number>;
   rateLimitStatus: string;
   rateLimitPolicies: RateLimitPolicyItem[];
   k6Script: string;
@@ -30,13 +36,15 @@ export async function runLoadTest(
   targetUrl: string,
   vus: number,
   durationSeconds: number,
-  rampUpSeconds: number
+  rampUpSeconds: number,
+  httpMethod: string = 'GET'
 ): Promise<LoadTestResponse> {
   const { data } = await httpClient.post<ApiResponse<LoadTestResponse>>('/loadtest/run', {
     targetUrl,
     vus,
     durationSeconds,
     rampUpSeconds,
+    httpMethod,
   });
   return data.data as LoadTestResponse;
 }

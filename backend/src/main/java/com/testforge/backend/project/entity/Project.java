@@ -2,17 +2,11 @@ package com.testforge.backend.project.entity;
 
 import com.testforge.backend.auth.entity.User;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.Instant;
 
 @Entity
 @Table(name = "projects")
-@Getter
-@Setter
-@NoArgsConstructor
 public class Project {
 
     @Id
@@ -76,4 +70,61 @@ public class Project {
     public void onUpdate() {
         this.updatedAt = Instant.now();
     }
+
+    public Project() {
+    }
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public User getOwner() { return owner; }
+    public void setOwner(User owner) { this.owner = owner; }
+
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public ProjectSourceType getSourceType() { return sourceType; }
+    public void setSourceType(ProjectSourceType sourceType) { this.sourceType = sourceType; }
+
+    public String getRepoUrl() { return repoUrl; }
+    public void setRepoUrl(String repoUrl) { this.repoUrl = repoUrl; }
+
+    public String getTargetUrl() { return targetUrl; }
+    public void setTargetUrl(String targetUrl) { this.targetUrl = targetUrl; }
+
+    public String getTargetApiUrl() { return targetApiUrl; }
+    public void setTargetApiUrl(String targetApiUrl) { this.targetApiUrl = targetApiUrl; }
+
+    public String getStoragePath() { return storagePath; }
+    public void setStoragePath(String storagePath) { this.storagePath = storagePath; }
+
+    public String getOriginalArchivePath() { return originalArchivePath; }
+    public void setOriginalArchivePath(String originalArchivePath) { this.originalArchivePath = originalArchivePath; }
+
+    public String getSwaggerFilePath() { return swaggerFilePath; }
+    public void setSwaggerFilePath(String swaggerFilePath) { this.swaggerFilePath = swaggerFilePath; }
+
+    public String getPrimaryLanguage() { return primaryLanguage; }
+    public void setPrimaryLanguage(String primaryLanguage) { this.primaryLanguage = primaryLanguage; }
+
+    public Integer getFileCount() { return fileCount; }
+    public void setFileCount(Integer fileCount) { this.fileCount = fileCount; }
+
+    public ProjectStatus getStatus() { return status; }
+    public void setStatus(ProjectStatus status) { this.status = status; }
+
+    public String getStructureSummaryJson() { return structureSummaryJson; }
+    public void setStructureSummaryJson(String structureSummaryJson) { this.structureSummaryJson = structureSummaryJson; }
+
+    public String getProcessingError() { return processingError; }
+    public void setProcessingError(String processingError) { this.processingError = processingError; }
+
+    public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    public Instant getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 }

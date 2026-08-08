@@ -230,7 +230,7 @@ public class E2eTestService {
             Set<String> links = extractLinks(body, targetUrl);
             int checked = 0;
             for (String link : links) {
-                if (checked >= 8) break; // Limit to 8 links to keep response time reasonable
+                if (checked >= 20) break; // Limit to 20 links to keep response time reasonable
                 try {
                     long start = System.currentTimeMillis();
                     HttpRequest linkReq = HttpRequest.newBuilder()
@@ -242,16 +242,39 @@ public class E2eTestService {
                     HttpResponse<Void> linkResp = httpClient.send(linkReq, HttpResponse.BodyHandlers.discarding());
                     long latency = System.currentTimeMillis() - start;
 
-                    boolean ok = linkResp.statusCode() >= 200 && linkResp.statusCode() < 400;
-                    results.add(new TestResult(
-                            "Internal Link: " + truncateUrl(link),
-                            "NAVIGATION",
-                            ok,
-                            linkResp.statusCode(),
-                            latency,
-                            ok ? "Link reachable" : null,
-                            ok ? null : "Broken link — HTTP " + linkResp.statusCode()
-                    ));
+                    // Fallback to GET if HEAD returns 405 Method Not Allowed
+                    if (linkResp.statusCode() == 405) {
+                        start = System.currentTimeMillis();
+                        HttpRequest getReq = HttpRequest.newBuilder()
+                                .uri(URI.create(link))
+                                .header("User-Agent", USER_AGENT)
+                                .timeout(Duration.ofSeconds(5))
+                                .GET()
+                                .build();
+                        HttpResponse<Void> getResp = httpClient.send(getReq, HttpResponse.BodyHandlers.discarding());
+                        latency = System.currentTimeMillis() - start;
+                        boolean ok = getResp.statusCode() >= 200 && getResp.statusCode() < 400;
+                        results.add(new TestResult(
+                                "Internal Link: " + truncateUrl(link),
+                                "NAVIGATION",
+                                ok,
+                                getResp.statusCode(),
+                                latency,
+                                ok ? "Link reachable (GET fallback)" : null,
+                                ok ? null : "Broken link — HTTP " + getResp.statusCode()
+                        ));
+                    } else {
+                        boolean ok = linkResp.statusCode() >= 200 && linkResp.statusCode() < 400;
+                        results.add(new TestResult(
+                                "Internal Link: " + truncateUrl(link),
+                                "NAVIGATION",
+                                ok,
+                                linkResp.statusCode(),
+                                latency,
+                                ok ? "Link reachable" : null,
+                                ok ? null : "Broken link — HTTP " + linkResp.statusCode()
+                        ));
+                    }
                     checked++;
                 } catch (Exception ex) {
                     results.add(new TestResult(

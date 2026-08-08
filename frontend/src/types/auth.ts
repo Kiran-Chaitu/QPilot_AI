@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'DEVELOPER' | 'QA_ENGINEER';
+export type UserRole = 'ADMIN' | 'DEVELOPER' | 'QA_ENGINEER' | 'QA_LEAD';
 
 export interface UserSummary {
   id: number;

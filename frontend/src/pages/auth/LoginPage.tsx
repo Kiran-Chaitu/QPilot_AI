@@ -60,8 +60,9 @@ export function LoginPage() {
   }
 
   const handleFillDemo = (email: string) => {
-    setValue('email', email);
-    setValue('password', 'password123');
+    setValue('email', email, { shouldValidate: true });
+    setValue('password', 'password123', { shouldValidate: true });
+    onSubmit({ email, password: 'password123' });
   };
 
   return (
@@ -71,7 +72,7 @@ export function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.15) 0%, transparent 40%), #090D16',
+        background: 'radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.18) 0%, transparent 45%), radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.18) 0%, transparent 45%), #090D16',
         p: 2,
       }}
     >
@@ -85,8 +86,9 @@ export function LoginPage() {
           borderRadius: 4,
           overflow: 'hidden',
           border: '1px solid',
-          borderColor: 'divider',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6)',
+          borderColor: 'rgba(255, 255, 255, 0.12)',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(16px)',
         }}
       >
         {/* Left Feature Hero Side */}
@@ -94,9 +96,9 @@ export function LoginPage() {
           sx={{
             flex: 1,
             p: { xs: 4, md: 5 },
-            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.1) 100%)',
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(139, 92, 246, 0.15) 100%)',
             borderRight: { md: '1px solid' },
-            borderColor: 'divider',
+            borderColor: 'rgba(255, 255, 255, 0.08)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -106,24 +108,24 @@ export function LoginPage() {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 4 }}>
               <Box
                 sx={{
-                  width: 42,
-                  height: 42,
+                  width: 44,
+                  height: 44,
                   borderRadius: '12px',
                   background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: '0 6px 16px rgba(99, 102, 241, 0.4)',
+                  boxShadow: '0 6px 20px rgba(99, 102, 241, 0.5)',
                 }}
               >
-                <Bot size={24} color="#FFF" />
+                <Bot size={26} color="#FFF" />
               </Box>
-              <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: '-0.02em' }}>
+              <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: '-0.02em', background: 'linear-gradient(135deg, #FFFFFF 0%, #A5B4FC 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                 QPilot AI
               </Typography>
             </Box>
 
-            <Typography variant="h4" sx={{ fontWeight: 800, mb: 2, lineHeight: 1.2 }}>
+            <Typography variant="h4" sx={{ fontWeight: 800, mb: 2, lineHeight: 1.25 }}>
               Autonomous AI Quality Engineering Platform
             </Typography>
 
@@ -148,28 +150,30 @@ export function LoginPage() {
             </Stack>
           </Box>
 
-          <Box sx={{ pt: 2, borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              TEST DRIVE DEMO ACCOUNTS
+          <Box sx={{ pt: 2.5, borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontWeight: 700, letterSpacing: '0.05em' }}>
+              1-CLICK DEMO ACCOUNTS
             </Typography>
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" spacing={1.5}>
               <Chip
-                icon={<Zap size={14} />}
+                icon={<Zap size={14} color="#6366F1" />}
                 label="Dev Account"
                 clickable
                 onClick={() => handleFillDemo('dev@testforge.com')}
                 color="primary"
                 variant="outlined"
-                size="small"
+                size="medium"
+                sx={{ fontWeight: 700, borderRadius: 2, py: 1.8 }}
               />
               <Chip
-                icon={<ShieldCheck size={14} />}
+                icon={<ShieldCheck size={14} color="#10B981" />}
                 label="QA Lead Account"
                 clickable
                 onClick={() => handleFillDemo('qa@testforge.com')}
                 color="secondary"
                 variant="outlined"
-                size="small"
+                size="medium"
+                sx={{ fontWeight: 700, borderRadius: 2, py: 1.8 }}
               />
             </Stack>
           </Box>
@@ -177,7 +181,7 @@ export function LoginPage() {
 
         {/* Right Form Side */}
         <Box sx={{ flex: 1, p: { xs: 4, md: 5 }, bgcolor: 'background.paper', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, mb: 0.5 }}>
             Sign In to QPilot
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -203,7 +207,7 @@ export function LoginPage() {
                   input: {
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Mail size={18} style={{ opacity: 0.6 }} />
+                        <Mail size={18} style={{ opacity: 0.7 }} />
                       </InputAdornment>
                     ),
                   },
@@ -222,13 +226,19 @@ export function LoginPage() {
                   input: {
                     startAdornment: (
                       <InputAdornment position="start">
-                        <Lock size={18} style={{ opacity: 0.6 }} />
+                        <Lock size={18} style={{ opacity: 0.7 }} />
                       </InputAdornment>
                     ),
                     endAdornment: (
                       <InputAdornment position="end">
-                        <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
-                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        <IconButton
+                          type="button"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          edge="end"
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          tabIndex={-1}
+                        >
+                          {showPassword ? <EyeOff size={18} color="#6366F1" /> : <Eye size={18} />}
                         </IconButton>
                       </InputAdornment>
                     ),
@@ -243,7 +253,16 @@ export function LoginPage() {
                 size="large"
                 disabled={isSubmitting}
                 endIcon={<ArrowRight size={18} />}
-                sx={{ py: 1.4, fontWeight: 700, borderRadius: 2.5 }}
+                sx={{
+                  py: 1.4,
+                  fontWeight: 800,
+                  borderRadius: 2.5,
+                  background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
+                  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
+                  '&:hover': {
+                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
+                  },
+                }}
               >
                 {isSubmitting ? 'Authenticating…' : 'Sign In to Workspace'}
               </Button>

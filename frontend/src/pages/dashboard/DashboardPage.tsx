@@ -1,22 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Button,
   Card,
   Chip,
+  CircularProgress,
+  FormControl,
   Grid,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
   Skeleton,
   Stack,
   Tab,
-  Tabs,
-  Typography,
-  Paper,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  Tabs,
+  Typography,
 } from '@mui/material';
 import {
   Plus,
@@ -33,6 +38,7 @@ import {
   ArrowUpRight,
   FileCode,
   MonitorCheck,
+  Play,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -51,8 +57,11 @@ import { StatusChip } from '../../components/common/StatusChip';
 import { UploadProjectDialog } from './UploadProjectDialog';
 import { listProjects } from '../../api/projectApi';
 import { getDashboardStats, type DashboardStats } from '../../api/dashboardApi';
+import { getLatestAnalysis, runAnalysis } from '../../api/analysisApi';
+import { useToast } from '../../context/ToastContext';
 import { extractErrorMessage } from '../../api/httpClient';
 import type { ProjectResponse } from '../../types/project';
+import type { AnalysisResultResponse } from '../../types/analysis';
 
 // Tab components
 import { WebsiteAuditorTab } from '../project/tabs/WebsiteAuditorTab';
@@ -72,6 +81,7 @@ const TEST_TYPE_COLORS: Record<string, string> = {
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const { showSuccess, showError } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get('tab') || 'overview';
 
@@ -81,7 +91,13 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  async function loadProjects() {
+  // Dynamic project selection state for dashboard tabs
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisResultResponse | null>(null);
+  const [isAnalyzingSelected, setIsAnalyzingSelected] = useState(false);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
+
+  const loadProjects = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -91,16 +107,57 @@ export function DashboardPage() {
       ]);
       setProjects(projectData);
       if (statsData) setStats(statsData);
+      if (projectData.length > 0 && selectedProjectId === null) {
+        setSelectedProjectId(projectData[0].id);
+      }
     } catch (err) {
       setError(extractErrorMessage(err, 'Could not load your projects.'));
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [selectedProjectId]);
 
   useEffect(() => {
     loadProjects();
-  }, []);
+  }, [loadProjects]);
+
+  // Fetch analysis whenever selectedProjectId changes
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setSelectedAnalysis(null);
+      return;
+    }
+    let isMounted = true;
+    setIsLoadingAnalysis(true);
+    getLatestAnalysis(selectedProjectId)
+      .then((res) => {
+        if (isMounted) setSelectedAnalysis(res);
+      })
+      .catch(() => {
+        if (isMounted) setSelectedAnalysis(null);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingAnalysis(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedProjectId]);
+
+  const handleRunAuditForSelected = async () => {
+    if (!selectedProjectId) return;
+    setIsAnalyzingSelected(true);
+    try {
+      const res = await runAnalysis(selectedProjectId);
+      setSelectedAnalysis(res);
+      showSuccess('AI Multi-Agent Audit completed successfully!');
+      loadProjects();
+    } catch (err) {
+      showError(extractErrorMessage(err, 'AI Analysis failed.'));
+    } finally {
+      setIsAnalyzingSelected(false);
+    }
+  };
 
   const handleTabChange = (_e: React.SyntheticEvent, newValue: string) => {
     if (newValue === 'overview') {
@@ -478,22 +535,121 @@ export function DashboardPage() {
           </Stack>
         )}
 
+        {/* DYNAMIC PROJECT CONTEXT BAR FOR MODULE TABS */}
+        {currentTab !== 'overview' && projects.length > 0 && (
+          <Paper
+            sx={{
+              p: 2,
+              mb: 1,
+              borderRadius: 3,
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              bgcolor: 'background.paper',
+              display: 'flex',
+              justify: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 2,
+            }}
+          >
+            <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+              <FormControl size="small" sx={{ minWidth: 240 }}>
+                <InputLabel id="dashboard-project-select-label">Active Project</InputLabel>
+                <Select
+                  labelId="dashboard-project-select-label"
+                  value={selectedProjectId ?? ''}
+                  label="Active Project"
+                  onChange={(e) => setSelectedProjectId(Number(e.target.value))}
+                >
+                  {projects.map((p) => (
+                    <MenuItem key={p.id} value={p.id}>
+                      {p.name} ({p.sourceType})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              {selectedProjectId && (
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                  {projects.find((p) => p.id === selectedProjectId) && (
+                    <StatusChip status={projects.find((p) => p.id === selectedProjectId)!.status} />
+                  )}
+                  {isLoadingAnalysis ? (
+                    <CircularProgress size={16} color="primary" />
+                  ) : selectedAnalysis ? (
+                    <Chip
+                      icon={<Sparkles size={12} color="#10B981" />}
+                      label={`${selectedAnalysis.tests.length} Tests Generated`}
+                      size="small"
+                      color="success"
+                      variant="outlined"
+                      sx={{ fontWeight: 700 }}
+                    />
+                  ) : null}
+                </Stack>
+              )}
+            </Stack>
+
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+              {selectedProjectId && (
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="primary"
+                  startIcon={isAnalyzingSelected ? <CircularProgress size={14} color="inherit" /> : <Play size={14} />}
+                  onClick={handleRunAuditForSelected}
+                  disabled={isAnalyzingSelected}
+                  sx={{ fontWeight: 700 }}
+                >
+                  {isAnalyzingSelected ? 'Running AI Audit…' : selectedAnalysis ? 'Re-Run AI Audit' : 'Run AI Audit'}
+                </Button>
+              )}
+              {selectedProjectId && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  endIcon={<ArrowUpRight size={14} />}
+                  onClick={() => navigate(`/projects/${selectedProjectId}`)}
+                  sx={{ fontWeight: 700 }}
+                >
+                  Open Details Page
+                </Button>
+              )}
+            </Stack>
+          </Paper>
+        )}
+
         {/* INTERACTIVE MODULE TABS */}
-        {currentTab === 'website' && <WebsiteAuditorTab />}
+        {currentTab === 'website' && (
+          <WebsiteAuditorTab
+            defaultUrl={projects.find((p) => p.id === selectedProjectId)?.targetUrl}
+          />
+        )}
 
-        {currentTab === 'loadtest' && <LoadTesterTab />}
+        {currentTab === 'loadtest' && (
+          <LoadTesterTab
+            defaultApiUrl={projects.find((p) => p.id === selectedProjectId)?.targetApiUrl}
+          />
+        )}
 
-        {currentTab === 'e2e' && <E2eTestTab />}
+        {currentTab === 'e2e' && (
+          <E2eTestTab
+            defaultUrl={projects.find((p) => p.id === selectedProjectId)?.targetUrl}
+          />
+        )}
 
-        {currentTab === 'security' && <SecurityReportTab findings={[]} />}
+        {currentTab === 'security' && (
+          <SecurityReportTab findings={selectedAnalysis?.securityFindings ?? []} />
+        )}
 
-        {currentTab === 'tests' && <GeneratedTestsTab tests={[]} />}
+        {currentTab === 'tests' && (
+          <GeneratedTestsTab tests={selectedAnalysis?.tests ?? []} />
+        )}
 
         {currentTab === 'reports' && (
           <ReportTab
-            projectId={projects[0]?.id || 1}
-            projectName={projects[0]?.name || 'Global Quality Workspace'}
-            hasAnalysis={true}
+            projectId={selectedProjectId || projects[0]?.id || 1}
+            projectName={projects.find((p) => p.id === selectedProjectId)?.name || projects[0]?.name || 'Global Quality Workspace'}
+            hasAnalysis={selectedAnalysis !== null}
           />
         )}
       </Box>
