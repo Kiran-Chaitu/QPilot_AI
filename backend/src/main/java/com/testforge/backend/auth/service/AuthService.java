@@ -35,12 +35,15 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.email())) {
+        // Emails are always stored lowercase, so the uniqueness check must be too — otherwise
+        // "User@x.com" registers a second row that can never be logged into (login lowercases).
+        String email = request.email().trim().toLowerCase();
+        if (userRepository.existsByEmail(email)) {
             throw new BadRequestException("An account with this email already exists");
         }
         User user = new User(
-                request.fullName(),
-                request.email().toLowerCase(),
+                request.fullName().trim(),
+                email,
                 passwordEncoder.encode(request.password()),
                 request.role() != null ? request.role() : Role.DEVELOPER
         );

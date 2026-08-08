@@ -10,10 +10,13 @@ export interface ProjectResponse {
   targetUrl?: string;
   targetApiUrl?: string;
   primaryLanguage?: string;
+  /** Files actually indexed. Zero for URL projects, because nothing was downloaded. */
   fileCount?: number;
   status: ProjectStatus;
   hasSwaggerSpec: boolean;
   processingError?: string;
+  /** For URL projects: what discovery found and what it could not, so an empty structure is explained. */
+  discoveryNotes?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,50 +1,35 @@
 import { httpClient } from './httpClient';
 import type { ApiResponse } from '../types/common';
+import type { LoadTestConfig, LoadTestRun } from '../types/loadtest';
 
-export interface RateLimitPolicyItem {
-  policy: string;
-  value: string;
-  status: string;
+/**
+ * Load-test API client.
+ *
+ * <p>Starting a run is asynchronous by design: {@link startLoadTest} returns as soon as the server has
+ * accepted the configuration, and the caller polls {@link getLoadTestRun} for live partial metrics. That
+ * is what makes a two-minute test possible without holding an HTTP request open for two minutes.
+ */
+
+export async function startLoadTest(config: LoadTestConfig): Promise<LoadTestRun> {
+  const { data } = await httpClient.post<ApiResponse<LoadTestRun>>('/loadtest/runs', config);
+  return data.data as LoadTestRun;
 }
 
-export interface LoadTestResponse {
-  targetUrl: string;
-  vus: number;
-  durationSeconds: number;
-  rampUpSeconds: number;
-  rpsThroughput: number;
-  avgLatencyMs: number;
-  p50Ms: number;
-  p90Ms: number;
-  p95Ms: number;
-  p99Ms: number;
-  minLatencyMs: number;
-  maxLatencyMs: number;
-  totalRequests: number;
-  successfulRequests: number;
-  failedRequests: number;
-  successRatePercent: number;
-  errorRatePercent: number;
-  statusCodeDistribution: Record<number, number>;
-  rateLimitStatus: string;
-  rateLimitPolicies: RateLimitPolicyItem[];
-  k6Script: string;
-  jmeterScript: string;
+export async function getLoadTestRun(runId: number): Promise<LoadTestRun> {
+  const { data } = await httpClient.get<ApiResponse<LoadTestRun>>(`/loadtest/runs/${runId}`);
+  return data.data as LoadTestRun;
 }
 
-export async function runLoadTest(
-  targetUrl: string,
-  vus: number,
-  durationSeconds: number,
-  rampUpSeconds: number,
-  httpMethod: string = 'GET'
-): Promise<LoadTestResponse> {
-  const { data } = await httpClient.post<ApiResponse<LoadTestResponse>>('/loadtest/run', {
-    targetUrl,
-    vus,
-    durationSeconds,
-    rampUpSeconds,
-    httpMethod,
-  });
-  return data.data as LoadTestResponse;
+/**
+ * Requests that a running test stop. Returns immediately — the run finalizes with the metrics it had
+ * already measured and transitions to CANCELLED, so partial results are kept rather than discarded.
+ */
+export async function stopLoadTest(runId: number): Promise<LoadTestRun> {
+  const { data } = await httpClient.post<ApiResponse<LoadTestRun>>(`/loadtest/runs/${runId}/stop`);
+  return data.data as LoadTestRun;
+}
+
+export async function listLoadTestRuns(): Promise<LoadTestRun[]> {
+  const { data } = await httpClient.get<ApiResponse<LoadTestRun[]>>('/loadtest/runs');
+  return data.data ?? [];
 }

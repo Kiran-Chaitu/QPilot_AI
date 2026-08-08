@@ -40,6 +40,48 @@ public class GeneratedTest {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String code;
 
+    /** Whether this test was derived from scanned project facts or suggested by an LLM. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ResultOrigin origin = ResultOrigin.STATIC_ANALYSIS;
+
+    /**
+     * Real execution lifecycle. Starts at {@link TestExecutionStatus#GENERATED} and is only advanced
+     * by {@code ApiTestExecutionService} after an actual HTTP round-trip.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private TestExecutionStatus executionStatus = TestExecutionStatus.GENERATED;
+
+    /** Human-readable outcome or the reason a test could not be run. */
+    @Column(length = 1000)
+    private String executionDetail;
+
+    private Instant lastExecutedAt;
+
+    /** Measured wall-clock duration of the last real execution, in milliseconds. Null if never run. */
+    private Long executionLatencyMs;
+
+    /** Observed HTTP status of the last real execution. Null if never run or not an HTTP test. */
+    private Integer observedHttpStatus;
+
+    /**
+     * For API tests: the concrete method/path this test exercises, extracted from the project's own
+     * discovered routes. These are what make an API test genuinely executable against a live target.
+     */
+    private String requestMethod;
+
+    @Column(length = 1000)
+    private String requestPath;
+
+    /** Request body to send when executing this test (malformed-payload / injection probes carry one). */
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String requestBody;
+
+    /** Status codes considered a pass for this test, e.g. "200,201" or "401,403". */
+    private String expectedStatusCodes;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -72,6 +114,36 @@ public class GeneratedTest {
 
     public String getCode() { return code; }
     public void setCode(String code) { this.code = code; }
+
+    public ResultOrigin getOrigin() { return origin; }
+    public void setOrigin(ResultOrigin origin) { this.origin = origin; }
+
+    public TestExecutionStatus getExecutionStatus() { return executionStatus; }
+    public void setExecutionStatus(TestExecutionStatus executionStatus) { this.executionStatus = executionStatus; }
+
+    public String getExecutionDetail() { return executionDetail; }
+    public void setExecutionDetail(String executionDetail) { this.executionDetail = executionDetail; }
+
+    public Instant getLastExecutedAt() { return lastExecutedAt; }
+    public void setLastExecutedAt(Instant lastExecutedAt) { this.lastExecutedAt = lastExecutedAt; }
+
+    public Long getExecutionLatencyMs() { return executionLatencyMs; }
+    public void setExecutionLatencyMs(Long executionLatencyMs) { this.executionLatencyMs = executionLatencyMs; }
+
+    public Integer getObservedHttpStatus() { return observedHttpStatus; }
+    public void setObservedHttpStatus(Integer observedHttpStatus) { this.observedHttpStatus = observedHttpStatus; }
+
+    public String getRequestMethod() { return requestMethod; }
+    public void setRequestMethod(String requestMethod) { this.requestMethod = requestMethod; }
+
+    public String getRequestPath() { return requestPath; }
+    public void setRequestPath(String requestPath) { this.requestPath = requestPath; }
+
+    public String getRequestBody() { return requestBody; }
+    public void setRequestBody(String requestBody) { this.requestBody = requestBody; }
+
+    public String getExpectedStatusCodes() { return expectedStatusCodes; }
+    public void setExpectedStatusCodes(String expectedStatusCodes) { this.expectedStatusCodes = expectedStatusCodes; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

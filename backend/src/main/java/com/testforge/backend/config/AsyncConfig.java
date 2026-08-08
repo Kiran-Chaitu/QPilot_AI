@@ -40,6 +40,17 @@ public class AsyncConfig implements AsyncConfigurer {
         return buildExecutor("analysis-", 2, 6, 50);
     }
 
+    /**
+     * Dedicated pool for load tests. Kept separate from the analysis pool because a load test occupies
+     * its worker for its entire configured duration — up to two minutes — and a couple of concurrent
+     * runs would otherwise starve every queued analysis job. Sized small on purpose: each run already
+     * spawns its own virtual users, so pool size here bounds concurrent *tests*, not concurrent requests.
+     */
+    @Bean(name = "loadTestExecutor")
+    public Executor loadTestExecutor() {
+        return buildExecutor("loadtest-", 1, 4, 20);
+    }
+
     /** Default executor for any @Async method that doesn't name a specific pool. */
     @Override
     public Executor getAsyncExecutor() {

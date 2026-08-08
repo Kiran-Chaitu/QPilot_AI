@@ -1,11 +1,16 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Card,
+  Checkbox,
   Chip,
   CircularProgress,
+  Collapse,
+  Divider,
   FormControl,
+  FormControlLabel,
   Grid,
   InputLabel,
   LinearProgress,
@@ -20,424 +25,707 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import {
+  Activity,
+  ChevronDown,
+  ChevronUp,
   Gauge,
+  History,
   Play,
-  FileCode,
-  Download,
-  Copy,
-  Check,
-  ShieldCheck,
-  BarChart3,
+  ShieldAlert,
+  Square,
   Timer,
 } from 'lucide-react';
-import { runLoadTest, type LoadTestResponse } from '../../../api/loadTestApi';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { getLoadTestRun, listLoadTestRuns, startLoadTest, stopLoadTest } from '../../../api/loadTestApi';
+import { extractErrorMessage } from '../../../api/httpClient';
 import { useToast } from '../../../context/ToastContext';
+import { EmptyState, ErrorState } from '../../../components/common/StateViews';
+import { brand, status as statusColors } from '../../../theme/palette';
+import type { LoadTestRun, LoadTestStatus } from '../../../types/loadtest';
 
-export function LoadTesterTab({ defaultApiUrl }: { defaultApiUrl?: string }) {
-  const { showSuccess, showError } = useToast();
-  const [targetUrl, setTargetUrl] = useState(defaultApiUrl || '');
-  const [vus, setVus] = useState<number>(50);
-  const [duration, setDuration] = useState<number>(30);
-  const [rampUp] = useState<number>(5);
+/** How often a running test is polled for live metrics. */
+const POLL_INTERVAL_MS = 1500;
+
+const STATUS_META: Record<LoadTestStatus, { label: string; color: string; description: string }> = {
+  CONFIGURED: { label: 'Configured', color: '#8B93A7', description: 'Accepted and queued; traffic has not started yet.' },
+  RUNNING: { label: 'Running', color: brand.primary, description: 'Generating traffic now. Metrics below are live and still moving.' },
+  COMPLETED: { label: 'Completed', color: statusColors.success, description: 'Ran to the end of the configured plan. Metrics are final.' },
+  CANCELLED: { label: 'Cancelled', color: statusColors.warning, description: 'Stopped early. Metrics cover only the traffic actually sent.' },
+  FAILED: { label: 'Failed', color: statusColors.error, description: 'The run could not complete.' },
+};
+
+function StatusChip({ runStatus }: { runStatus: LoadTestStatus }) {
+  const meta = STATUS_META[runStatus];
+  return (
+    <Tooltip title={meta.description}>
+      <Chip
+        size="small"
+        label={meta.label}
+        icon={runStatus === 'RUNNING' ? <span className="qp-live-dot" style={{ marginLeft: 8 }} /> : undefined}
+        sx={{ fontWeight: 750, color: meta.color, bgcolor: `${meta.color}1F`, border: `1px solid ${meta.color}44`, cursor: 'help' }}
+      />
+    </Tooltip>
+  );
+}
+
+function Metric({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+  return (
+    <Paper sx={{ p: 2, borderRadius: 3, border: '1px solid', borderColor: 'divider', height: '100%' }}>
+      <Typography variant="overline" color="text.secondary" sx={{ display: 'block', lineHeight: 1.4 }}>
+        {label}
+      </Typography>
+      <Typography variant="h5" sx={{ fontWeight: 800, color: color ?? 'text.primary', my: 0.25, lineHeight: 1.2 }}>
+        {value}
+      </Typography>
+      {sub && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.4 }}>
+          {sub}
+        </Typography>
+      )}
+    </Paper>
+  );
+}
+
+export function LoadTesterTab({ defaultApiUrl, projectId }: { defaultApiUrl?: string; projectId?: number }) {
+  const { showSuccess, showError, showInfo } = useToast();
+
+  const [targetUrl, setTargetUrl] = useState(defaultApiUrl ?? '');
   const [httpMethod, setHttpMethod] = useState('GET');
+  const [virtualUsers, setVirtualUsers] = useState(20);
+  const [durationSeconds, setDurationSeconds] = useState(20);
+  const [rampUpSeconds, setRampUpSeconds] = useState(3);
+  const [rampDownSeconds, setRampDownSeconds] = useState(2);
+  const [targetRps, setTargetRps] = useState<string>('');
+  const [timeoutSeconds, setTimeoutSeconds] = useState<string>('10');
+  const [headersText, setHeadersText] = useState('');
+  const [requestBody, setRequestBody] = useState('');
+  const [authorized, setAuthorized] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const [isRunning, setIsRunning] = useState(false);
-  const [loadResult, setLoadResult] = useState<LoadTestResponse | null>(null);
-  const [copiedK6, setCopiedK6] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [run, setRun] = useState<LoadTestRun | null>(null);
+  const [history, setHistory] = useState<LoadTestRun[]>([]);
+  const [isStarting, setIsStarting] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleStartLoadTest = async () => {
-    if (!targetUrl) return;
-    setIsRunning(true);
-    setProgress(0);
-    setLoadResult(null);
+  // Held in a ref so the polling effect can clear a timer it did not itself create.
+  const pollTimer = useRef<number | null>(null);
 
-    // Simulate progress bar since the backend takes time for real load testing
-    const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 90) return prev;
-        // Progress accelerates based on expected duration
-        const increment = Math.max(0.5, 80 / (duration + rampUp));
-        return Math.min(prev + increment, 90);
-      });
-    }, 1000);
-
+  const loadHistory = useCallback(async () => {
     try {
-      const data = await runLoadTest(targetUrl, vus, duration, rampUp, httpMethod);
-      setLoadResult(data);
-      setProgress(100);
-      showSuccess(
-        `Load test completed! ${data.totalRequests} requests sent, ` +
-        `${data.successfulRequests} successful, avg latency ${data.avgLatencyMs}ms`
-      );
+      setHistory(await listLoadTestRuns());
     } catch {
-      showError('Load test failed. Check endpoint accessibility.');
+      // History is supplementary; a failure here must not obscure the current run.
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  useEffect(() => {
+    if (defaultApiUrl && !targetUrl) {
+      setTargetUrl(defaultApiUrl);
+    }
+    // Only seeds an empty field, so it never overwrites something the user typed.
+  }, [defaultApiUrl, targetUrl]);
+
+  /**
+   * Polls the run while it is in flight.
+   *
+   * <p>This is what makes the progress bar real: every tick reads metrics the server measured from
+   * completed requests. The previous implementation animated a client-side timer that was unrelated to
+   * what the backend was doing.
+   */
+  useEffect(() => {
+    if (!run || (run.status !== 'RUNNING' && run.status !== 'CONFIGURED')) {
+      return;
+    }
+    let cancelled = false;
+
+    const tick = async () => {
+      try {
+        const updated = await getLoadTestRun(run.id);
+        if (cancelled) return;
+        setRun(updated);
+        if (updated.status === 'RUNNING' || updated.status === 'CONFIGURED') {
+          pollTimer.current = window.setTimeout(tick, POLL_INTERVAL_MS);
+        } else {
+          loadHistory();
+          if (updated.status === 'COMPLETED') {
+            showSuccess(
+              `Load test finished: ${updated.totalRequests} requests, ${updated.successRatePercent.toFixed(1)}% success, p95 ${updated.p95LatencyMs}ms.`,
+            );
+          } else if (updated.status === 'CANCELLED') {
+            showInfo(`Load test stopped. ${updated.totalRequests} requests were sent before the stop.`);
+          } else if (updated.status === 'FAILED') {
+            showError(updated.errorMessage ?? 'The load test failed.');
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(extractErrorMessage(err, 'Lost contact with the load test while polling for progress.'));
+        }
+      }
+    };
+
+    pollTimer.current = window.setTimeout(tick, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (pollTimer.current) {
+        window.clearTimeout(pollTimer.current);
+        pollTimer.current = null;
+      }
+    };
+  }, [run, loadHistory, showSuccess, showError, showInfo]);
+
+  /** Parses the "Name: value" header textarea, ignoring blank and malformed lines. */
+  const parseHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = {};
+    headersText.split('\n').forEach((line) => {
+      const separator = line.indexOf(':');
+      if (separator > 0) {
+        const name = line.slice(0, separator).trim();
+        const value = line.slice(separator + 1).trim();
+        if (name && value) headers[name] = value;
+      }
+    });
+    return headers;
+  };
+
+  const handleStart = async () => {
+    setError(null);
+    setIsStarting(true);
+    try {
+      const started = await startLoadTest({
+        targetUrl: targetUrl.trim(),
+        httpMethod,
+        virtualUsers,
+        durationSeconds,
+        rampUpSeconds,
+        rampDownSeconds,
+        targetRequestsPerSecond: targetRps ? Number(targetRps) : null,
+        requestTimeoutSeconds: timeoutSeconds ? Number(timeoutSeconds) : null,
+        headers: parseHeaders(),
+        requestBody: requestBody.trim() ? requestBody : null,
+        projectId: projectId ?? null,
+        authorizedTarget: authorized,
+      });
+      setRun(started);
+      if (started.clampNotes) {
+        showInfo(started.clampNotes);
+      }
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Could not start the load test.'));
     } finally {
-      clearInterval(progressInterval);
-      setIsRunning(false);
+      setIsStarting(false);
     }
   };
 
-  const handleCopyK6 = () => {
-    if (!loadResult?.k6Script) return;
-    navigator.clipboard.writeText(loadResult.k6Script);
-    setCopiedK6(true);
-    showSuccess('k6 script copied to clipboard!');
-    setTimeout(() => setCopiedK6(false), 2000);
+  const handleStop = async () => {
+    if (!run) return;
+    setIsStopping(true);
+    try {
+      setRun(await stopLoadTest(run.id));
+      showInfo('Stop requested. The run will finalize with the metrics measured so far.');
+    } catch (err) {
+      showError(extractErrorMessage(err, 'Could not stop the run.'));
+    } finally {
+      setIsStopping(false);
+    }
   };
 
-  const handleDownloadK6 = () => {
-    if (!loadResult?.k6Script) return;
-    const blob = new Blob([loadResult.k6Script], { type: 'text/javascript;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'loadtest_script.js';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showSuccess('Downloaded k6 script!');
-  };
+  const isActive = run?.status === 'RUNNING' || run?.status === 'CONFIGURED';
+  const canStart = targetUrl.trim().length > 0 && authorized && !isActive && !isStarting;
 
-  const getStatusCodeColor = (code: number): 'success' | 'warning' | 'error' | 'default' => {
-    if (code >= 200 && code < 300) return 'success';
-    if (code >= 300 && code < 400) return 'warning';
-    if (code >= 400) return 'error';
-    return 'default';
-  };
+  const statusEntries = run ? Object.entries(run.statusCodeDistribution ?? {}) : [];
 
   return (
     <Stack spacing={3}>
-      {/* Configuration Header */}
-      <Card
-        sx={{
-          p: 3,
-          border: '1px solid rgba(245, 158, 11, 0.3)',
-          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%)',
-          backdropFilter: 'blur(16px)',
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
-          <Gauge size={24} color="#F59E0B" />
+      {/* ── Configuration ─────────────────────────────────────────────── */}
+      <Card className="qp-gradient-border" sx={{ p: { xs: 2.5, md: 3 } }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1 }}>
+          <Gauge size={22} color={brand.primary} />
           <Typography variant="h6" sx={{ fontWeight: 800 }}>
-            Real Load & Stress Testing Engine
+            Load &amp; performance test
           </Typography>
-          <Chip label="Live HTTP Benchmark" color="warning" size="small" variant="outlined" />
-        </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Sends real concurrent HTTP requests to your endpoint using virtual threads. Measures actual throughput,
-          real latency percentiles (p50/p90/p95/p99), detects genuine rate limit headers (429, X-RateLimit-*),
-          and generates executable k6 scripts based on observed performance.
+          <Chip size="small" variant="outlined" color="secondary" label="Real HTTP traffic" sx={{ fontWeight: 700 }} />
+        </Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5, maxWidth: 780 }}>
+          Sends real concurrent requests and reports only what it measured: throughput from elapsed time, latency
+          percentiles from the full sample of completed requests, and the observed HTTP status distribution. Nothing is
+          modelled or simulated.
         </Typography>
 
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, md: 4 }}>
+        <Grid container spacing={2}>
+          <Grid size={{ xs: 12, md: 7 }}>
             <TextField
-              label="Target Endpoint URL"
+              label="Target URL"
               fullWidth
-              size="small"
               value={targetUrl}
-              onChange={(e) => setTargetUrl(e.target.value)}
-              disabled={isRunning}
-              placeholder="https://api.example.com/v1/health"
+              onChange={(event) => setTargetUrl(event.target.value)}
+              disabled={isActive}
+              placeholder="https://staging.example.com/api/health"
+              helperText="Must be a service you own or are authorized to test."
             />
           </Grid>
-          <Grid size={{ xs: 6, sm: 3, md: 1.5 }}>
+          <Grid size={{ xs: 6, md: 2 }}>
             <FormControl fullWidth size="small">
-              <InputLabel>Method</InputLabel>
+              <InputLabel id="lt-method">Method</InputLabel>
               <Select
+                labelId="lt-method"
                 value={httpMethod}
                 label="Method"
-                onChange={(e) => setHttpMethod(e.target.value)}
-                disabled={isRunning}
+                onChange={(event) => setHttpMethod(event.target.value)}
+                disabled={isActive}
               >
-                <MenuItem value="GET">GET</MenuItem>
-                <MenuItem value="HEAD">HEAD</MenuItem>
-                <MenuItem value="POST">POST</MenuItem>
-                <MenuItem value="PUT">PUT</MenuItem>
-                <MenuItem value="DELETE">DELETE</MenuItem>
+                {['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'].map((method) => (
+                  <MenuItem key={method} value={method}>
+                    {method}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Grid>
-          <Grid size={{ xs: 12, sm: 4, md: 2.5 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-              VIRTUAL USERS (VUs): {vus}
-            </Typography>
-            <Slider
-              value={vus}
-              onChange={(_e, v) => setVus(v as number)}
-              min={5}
-              max={500}
-              step={5}
-              disabled={isRunning}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 4, md: 2 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-              DURATION: {duration}s (Ramp: {rampUp}s)
-            </Typography>
-            <Slider
-              value={duration}
-              onChange={(_e, v) => setDuration(v as number)}
-              min={10}
-              max={120}
-              step={5}
-              disabled={isRunning}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 4, md: 2 }} sx={{ display: 'flex', alignItems: 'center' }}>
-            <Button
+          <Grid size={{ xs: 6, md: 3 }}>
+            <TextField
+              label="Target requests/sec"
               fullWidth
-              variant="contained"
-              color="warning"
-              size="large"
-              startIcon={isRunning ? <CircularProgress size={16} color="inherit" /> : <Play size={18} />}
-              onClick={handleStartLoadTest}
-              disabled={isRunning || !targetUrl}
-              sx={{ fontWeight: 700, borderRadius: 2 }}
-            >
-              {isRunning ? 'Testing…' : 'Run Load Test'}
-            </Button>
+              value={targetRps}
+              onChange={(event) => setTargetRps(event.target.value.replace(/\D/g, ''))}
+              disabled={isActive}
+              placeholder="unlimited"
+              helperText="Optional rate ceiling"
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Typography variant="caption" sx={{ fontWeight: 750 }}>
+              Virtual users: {virtualUsers}
+            </Typography>
+            <Slider value={virtualUsers} onChange={(_, value) => setVirtualUsers(value as number)} min={1} max={200} disabled={isActive} />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Typography variant="caption" sx={{ fontWeight: 750 }}>
+              Duration: {durationSeconds}s
+            </Typography>
+            <Slider value={durationSeconds} onChange={(_, value) => setDurationSeconds(value as number)} min={5} max={120} step={5} disabled={isActive} />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Typography variant="caption" sx={{ fontWeight: 750 }}>
+              Ramp-up: {rampUpSeconds}s
+            </Typography>
+            <Slider value={rampUpSeconds} onChange={(_, value) => setRampUpSeconds(value as number)} min={0} max={60} disabled={isActive} />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+            <Typography variant="caption" sx={{ fontWeight: 750 }}>
+              Ramp-down: {rampDownSeconds}s
+            </Typography>
+            <Slider value={rampDownSeconds} onChange={(_, value) => setRampDownSeconds(value as number)} min={0} max={60} disabled={isActive} />
           </Grid>
         </Grid>
 
-        {isRunning && (
-          <Box sx={{ mt: 3 }}>
-            <LinearProgress
-              variant="determinate"
-              value={progress}
-              color="warning"
-              sx={{ height: 6, borderRadius: 3 }}
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-              Sending real concurrent {httpMethod} requests to {targetUrl} — Ramping up to {vus} VUs
-              over {rampUp}s, sustaining for {duration}s... ({Math.round(progress)}%)
+        <Button
+          size="small"
+          onClick={() => setShowAdvanced((previous) => !previous)}
+          endIcon={showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          sx={{ mt: 1.5, fontWeight: 700 }}
+        >
+          {showAdvanced ? 'Hide' : 'Show'} headers, body &amp; timeout
+        </Button>
+        <Collapse in={showAdvanced}>
+          <Grid container spacing={2} sx={{ mt: 0.5 }}>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <TextField
+                label="Request headers"
+                fullWidth
+                multiline
+                minRows={3}
+                value={headersText}
+                onChange={(event) => setHeadersText(event.target.value)}
+                disabled={isActive}
+                placeholder={'Authorization: Bearer …\nX-Tenant: acme'}
+                helperText="One per line, Name: value"
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 5 }}>
+              <TextField
+                label="Request body"
+                fullWidth
+                multiline
+                minRows={3}
+                value={requestBody}
+                onChange={(event) => setRequestBody(event.target.value)}
+                disabled={isActive}
+                placeholder='{"query":"example"}'
+                helperText="Sent with POST/PUT/PATCH"
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                label="Per-request timeout (s)"
+                fullWidth
+                value={timeoutSeconds}
+                onChange={(event) => setTimeoutSeconds(event.target.value.replace(/\D/g, ''))}
+                disabled={isActive}
+              />
+            </Grid>
+          </Grid>
+        </Collapse>
+
+        {/*
+          Authorization gate. The server enforces this too, but requiring an explicit action here means the
+          user makes a conscious decision before generating sustained traffic at a real host.
+        */}
+        <Alert severity="warning" variant="outlined" icon={<ShieldAlert size={18} />} sx={{ mt: 2.5, borderRadius: 3 }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
+            Only test infrastructure you are authorized to test
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            Sustained traffic against a service you do not control is indistinguishable from a denial-of-service
+            attack and may breach your provider&apos;s terms. QPilot caps users, duration, rate and total requests, but
+            the choice of target is yours.
+          </Typography>
+          <FormControlLabel
+            sx={{ mt: 1 }}
+            control={<Checkbox checked={authorized} onChange={(event) => setAuthorized(event.target.checked)} disabled={isActive} size="small" />}
+            label={
+              <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                I own, or am explicitly authorized to load test, this target
+              </Typography>
+            }
+          />
+        </Alert>
+
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 2.5 }}>
+          <Button
+            variant="contained"
+            size="large"
+            startIcon={isStarting ? <CircularProgress size={16} color="inherit" /> : <Play size={18} />}
+            onClick={handleStart}
+            disabled={!canStart}
+            sx={{ fontWeight: 750, minWidth: 190 }}
+          >
+            {isStarting ? 'Starting…' : 'Start load test'}
+          </Button>
+          {isActive && (
+            <Button
+              variant="outlined"
+              color="error"
+              size="large"
+              startIcon={isStopping ? <CircularProgress size={16} color="inherit" /> : <Square size={16} />}
+              onClick={handleStop}
+              disabled={isStopping}
+              sx={{ fontWeight: 750 }}
+            >
+              {isStopping ? 'Stopping…' : 'Stop test'}
+            </Button>
+          )}
+          {!authorized && !isActive && (
+            <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
+              Confirm authorization above to enable the run.
             </Typography>
+          )}
+        </Stack>
+
+        {error && (
+          <Box sx={{ mt: 2 }}>
+            <ErrorState title="Load test could not start" message={error} onRetry={handleStart} retryLabel="Try again" />
           </Box>
         )}
       </Card>
 
-      {/* Execution Results */}
-      {loadResult && (
+      {/* ── Live / final results ──────────────────────────────────────── */}
+      {run && (
         <>
-          {/* Core Metrics */}
-          <Grid container spacing={2.5}>
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-              <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                  THROUGHPUT
+          <Card sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', mb: 1.5 }}>
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', minWidth: 0 }}>
+                <StatusChip runStatus={run.status} />
+                <Typography variant="body2" className="qp-truncate" sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
+                  {run.httpMethod} {run.targetUrl}
                 </Typography>
-                <Typography variant="h3" sx={{ fontWeight: 800, color: 'primary.main', mt: 0.5 }}>
-                  {loadResult.rpsThroughput}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">Req / second</Typography>
-              </Paper>
-            </Grid>
+              </Stack>
+              <Typography variant="caption" color="text.secondary">
+                {run.virtualUsers} users · {run.durationSeconds}s sustain · ramp {run.rampUpSeconds}s/{run.rampDownSeconds}s
+                {run.targetRequestsPerSecond ? ` · capped at ${run.targetRequestsPerSecond} req/s` : ''}
+              </Typography>
+            </Stack>
 
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-              <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                  AVG LATENCY
+            {isActive && (
+              <Box sx={{ mb: 1 }}>
+                <LinearProgress variant="determinate" value={run.progressPercent} />
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                  {run.progressPercent}% through the configured plan — {run.totalRequests} requests completed so far.
+                  These are live measurements, not an estimate.
                 </Typography>
-                <Typography variant="h3" sx={{ fontWeight: 800, color: 'success.main', mt: 0.5 }}>
-                  {loadResult.avgLatencyMs} ms
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Min: {loadResult.minLatencyMs}ms / Max: {loadResult.maxLatencyMs}ms
-                </Typography>
-              </Paper>
-            </Grid>
+              </Box>
+            )}
 
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-              <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                  P95 / P99 LATENCY
-                </Typography>
-                <Typography variant="h3" sx={{ fontWeight: 800, color: 'warning.main', mt: 0.5 }}>
-                  {loadResult.p95Ms} ms
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  p50: {loadResult.p50Ms}ms / p90: {loadResult.p90Ms}ms / p99: {loadResult.p99Ms}ms
-                </Typography>
-              </Paper>
-            </Grid>
+            {run.clampNotes && (
+              <Alert severity="info" variant="outlined" sx={{ mt: 1, borderRadius: 2.5 }}>
+                <Typography variant="caption">{run.clampNotes}</Typography>
+              </Alert>
+            )}
+            {run.errorMessage && (
+              <Alert severity={run.status === 'FAILED' ? 'error' : 'warning'} variant="outlined" sx={{ mt: 1, borderRadius: 2.5 }}>
+                <Typography variant="caption">{run.errorMessage}</Typography>
+              </Alert>
+            )}
+          </Card>
 
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-              <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                  TOTAL REQUESTS
-                </Typography>
-                <Typography variant="h3" sx={{ fontWeight: 800, color: 'info.main', mt: 0.5 }}>
-                  {loadResult.totalRequests}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  <span style={{ color: '#10B981' }}>{loadResult.successfulRequests} OK</span>
-                  {' / '}
-                  <span style={{ color: '#EF4444' }}>{loadResult.failedRequests} Failed</span>
-                </Typography>
-              </Paper>
+          <Grid container spacing={2} className="qp-stagger">
+            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+              <Metric label="Throughput" value={`${run.requestsPerSecond}`} sub="requests / second (measured)" color={brand.primary} />
             </Grid>
-
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-              <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                  SUCCESS RATE
-                </Typography>
-                <Typography variant="h3" sx={{ fontWeight: 800, color: loadResult.successRatePercent >= 95 ? 'success.main' : loadResult.successRatePercent >= 80 ? 'warning.main' : 'error.main', mt: 0.5 }}>
-                  {loadResult.successRatePercent.toFixed(1)}%
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Error: {loadResult.errorRatePercent.toFixed(1)}%
-                </Typography>
-              </Paper>
+            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+              <Metric label="Requests" value={`${run.totalRequests}`} sub={`${run.successfulRequests} ok · ${run.failedRequests} failed`} />
             </Grid>
-
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-              <Paper sx={{ p: 2.5, textAlign: 'center', borderRadius: 3, border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                  RATE LIMITING
-                </Typography>
-                <Typography variant="body1" sx={{ fontWeight: 800, color: loadResult.rateLimitStatus.includes('429') ? 'error.main' : 'info.main', mt: 1.5 }}>
-                  {loadResult.rateLimitStatus}
-                </Typography>
-              </Paper>
+            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+              <Metric
+                label="Success rate"
+                value={`${run.successRatePercent.toFixed(1)}%`}
+                sub={`error rate ${run.errorRatePercent.toFixed(1)}%`}
+                color={run.successRatePercent >= 99 ? statusColors.success : run.successRatePercent >= 90 ? statusColors.warning : statusColors.error}
+              />
+            </Grid>
+            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+              <Metric label="Avg latency" value={`${run.avgLatencyMs} ms`} sub={`min ${run.minLatencyMs} · max ${run.maxLatencyMs}`} />
+            </Grid>
+            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+              <Metric label="p95 latency" value={`${run.p95LatencyMs} ms`} sub={`p50 ${run.p50LatencyMs} · p99 ${run.p99LatencyMs}`} color={statusColors.warning} />
+            </Grid>
+            <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+              <Metric
+                label="Elapsed"
+                value={`${(run.actualDurationMs / 1000).toFixed(1)}s`}
+                sub={`${(run.totalBytesReceived / 1024).toFixed(0)} KB received`}
+              />
             </Grid>
           </Grid>
 
-          {/* Status Code Distribution */}
-          {loadResult.statusCodeDistribution && Object.keys(loadResult.statusCodeDistribution).length > 0 && (
-            <Card sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <BarChart3 size={20} color="#6366F1" />
-                <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                  Response Status Code Distribution
+          {/* Time series — plotted from the per-second buckets the engine recorded. */}
+          {run.timeSeries.length > 1 && (
+            <Card sx={{ p: { xs: 2, md: 2.5 } }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2 }}>
+                <Activity size={18} color={brand.secondary} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                  Measured over time
                 </Typography>
-              </Box>
-              <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap', gap: 1 }}>
-                {Object.entries(loadResult.statusCodeDistribution).map(([code, count]) => (
-                  <Chip
-                    key={code}
-                    label={`HTTP ${code}: ${count} requests`}
-                    color={getStatusCodeColor(Number(code))}
-                    variant="outlined"
-                    sx={{ fontWeight: 700, fontSize: '0.82rem' }}
-                  />
-                ))}
+                <Chip size="small" variant="outlined" label={`${run.timeSeries.length} one-second buckets`} />
               </Stack>
-              <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Timer size={14} color="#A1A1AA" />
-                <Typography variant="caption" color="text.secondary">
-                  Test duration: {loadResult.durationSeconds}s with {loadResult.vus} virtual users
-                  (ramp-up: {loadResult.rampUpSeconds}s)
-                </Typography>
+
+              <Box sx={{ width: '100%', height: 240 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={run.timeSeries} margin={{ top: 6, right: 12, left: -16, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="ltRequests" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={brand.primary} stopOpacity={0.45} />
+                        <stop offset="95%" stopColor={brand.primary} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--qp-border)" vertical={false} />
+                    <XAxis dataKey="secondOffset" stroke="var(--qp-text-muted)" fontSize={11} tickLine={false} unit="s" />
+                    <YAxis stroke="var(--qp-text-muted)" fontSize={11} tickLine={false} />
+                    <RechartsTooltip
+                      contentStyle={{ background: 'var(--qp-elevated)', border: '1px solid var(--qp-border)', borderRadius: 10, fontSize: 12 }}
+                      labelFormatter={(value) => `${value}s into the run`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Area type="monotone" dataKey="requests" name="Requests completed" stroke={brand.primary} strokeWidth={2} fill="url(#ltRequests)" />
+                    <Area type="monotone" dataKey="errors" name="Errors" stroke={statusColors.error} strokeWidth={2} fillOpacity={0.15} fill={statusColors.error} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </Box>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Box sx={{ width: '100%', height: 200 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={run.timeSeries} margin={{ top: 6, right: 12, left: -16, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--qp-border)" vertical={false} />
+                    <XAxis dataKey="secondOffset" stroke="var(--qp-text-muted)" fontSize={11} tickLine={false} unit="s" />
+                    <YAxis stroke="var(--qp-text-muted)" fontSize={11} tickLine={false} unit="ms" />
+                    <RechartsTooltip
+                      contentStyle={{ background: 'var(--qp-elevated)', border: '1px solid var(--qp-border)', borderRadius: 10, fontSize: 12 }}
+                      labelFormatter={(value) => `${value}s into the run`}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Line type="monotone" dataKey="avgLatencyMs" name="Avg latency" stroke={brand.secondary} strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="p95LatencyMs" name="p95 latency" stroke={statusColors.warning} strokeWidth={2} dot={false} strokeDasharray="4 3" />
+                  </AreaChart>
+                </ResponsiveContainer>
               </Box>
             </Card>
           )}
 
-          {/* Generated Scripts Section */}
-          <Grid container spacing={3}>
-            {/* Auto-generated k6 script */}
+          <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 6 }}>
-              <Card sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <FileCode size={20} color="#6366F1" />
-                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                      Generated k6 Executable Script
-                    </Typography>
-                  </Box>
-                  <Stack direction="row" spacing={1}>
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={copiedK6 ? <Check size={14} /> : <Copy size={14} />}
-                      onClick={handleCopyK6}
-                    >
-                      {copiedK6 ? 'Copied' : 'Copy'}
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      startIcon={<Download size={14} />}
-                      onClick={handleDownloadK6}
-                    >
-                      Script
-                    </Button>
+              <Card sx={{ p: 2.5, height: '100%' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 750, mb: 1.5 }}>
+                  Observed status codes
+                </Typography>
+                {statusEntries.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    No responses recorded yet.
+                  </Typography>
+                ) : (
+                  <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                    {statusEntries.map(([code, count]) => {
+                      const numeric = Number(code);
+                      const color =
+                        numeric === 0
+                          ? statusColors.error
+                          : numeric < 300
+                            ? statusColors.success
+                            : numeric < 400
+                              ? statusColors.info
+                              : numeric === 429
+                                ? statusColors.warning
+                                : statusColors.error;
+                      return (
+                        <Tooltip
+                          key={code}
+                          title={numeric === 0 ? 'No HTTP response received — DNS failure, connection refused or timeout.' : `HTTP ${code}`}
+                        >
+                          <Chip
+                            label={`${numeric === 0 ? 'No response' : `HTTP ${code}`} — ${count}`}
+                            sx={{ fontWeight: 700, color, bgcolor: `${color}18`, border: `1px solid ${color}3D`, cursor: 'help' }}
+                          />
+                        </Tooltip>
+                      );
+                    })}
                   </Stack>
-                </Box>
-                <Box
-                  component="pre"
-                  sx={{
-                    bgcolor: '#0d1117',
-                    color: '#c9d1d9',
-                    p: 2,
-                    borderRadius: 2,
-                    fontSize: 12,
-                    fontFamily: 'JetBrains Mono, monospace',
-                    maxHeight: 280,
-                    overflowY: 'auto',
-                  }}
-                >
-                  {loadResult.k6Script}
-                </Box>
+                )}
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 2 }}>
+                  <Timer size={14} />
+                  <Typography variant="caption" color="text.secondary">
+                    Throughput is computed from the measured {(run.actualDurationMs / 1000).toFixed(1)}s elapsed, not the
+                    configured duration.
+                  </Typography>
+                </Stack>
               </Card>
             </Grid>
 
-            {/* Rate Limit Analysis Report */}
             <Grid size={{ xs: 12, md: 6 }}>
-              <Card sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                  <ShieldCheck size={20} color="#10B981" />
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                    Rate Limit Detection Results
+              <Card sx={{ p: 2.5, height: '100%' }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 750, mb: 1.5 }}>
+                  Rate limiting observed during this run
+                </Typography>
+                {run.rateLimitEvidence ? (
+                  <Stack spacing={1.5}>
+                    <Alert
+                      severity={run.rateLimitEvidence.detected ? 'warning' : 'info'}
+                      variant="outlined"
+                      sx={{ borderRadius: 2.5 }}
+                    >
+                      <Typography variant="body2">{run.rateLimitEvidence.verdict}</Typography>
+                    </Alert>
+                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+                      <Chip size="small" variant="outlined" label={`HTTP 429 responses: ${run.rateLimitEvidence.http429Count}`} />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`RateLimit-Limit: ${run.rateLimitEvidence.rateLimitLimitHeader ?? 'not advertised'}`}
+                      />
+                      <Chip
+                        size="small"
+                        variant="outlined"
+                        label={`Retry-After: ${run.rateLimitEvidence.retryAfterValues.length > 0 ? run.rateLimitEvidence.retryAfterValues.join(', ') : 'not sent'}`}
+                      />
+                    </Stack>
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No rate-limit data recorded for this run yet.
                   </Typography>
-                  <Chip
-                    label="Real Header Analysis"
-                    size="small"
-                    color="success"
-                    variant="outlined"
-                    sx={{ fontSize: '0.68rem' }}
-                  />
-                </Box>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Policy / Header</TableCell>
-                      <TableCell>Observed Value</TableCell>
-                      <TableCell>Status</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {loadResult.rateLimitPolicies.map((r) => (
-                      <TableRow key={r.policy}>
-                        <TableCell sx={{ fontWeight: 600 }}>{r.policy}</TableCell>
-                        <TableCell><code style={{ fontFamily: 'JetBrains Mono', fontSize: 11 }}>{r.value}</code></TableCell>
-                        <TableCell>
-                          <Chip
-                            label={r.status}
-                            color={
-                              r.status.includes('Active') || r.status.includes('Detected')
-                                ? 'success'
-                                : r.status.includes('Not')
-                                ? 'default'
-                                : 'warning'
-                            }
-                            size="small"
-                            sx={{ height: 20, fontSize: 11 }}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                )}
               </Card>
             </Grid>
           </Grid>
         </>
+      )}
+
+      {!run && !error && (
+        <Card>
+          <EmptyState
+            icon={<Gauge size={24} />}
+            title="No load test running"
+            description="Configure a target above, confirm you are authorized to test it, and start a run. Progress and metrics appear here live as requests complete."
+          />
+        </Card>
+      )}
+
+      {/* ── History (real past runs) ──────────────────────────────────── */}
+      {history.length > 0 && (
+        <Card sx={{ p: { xs: 2, md: 2.5 } }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5 }}>
+            <History size={18} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+              Previous runs
+            </Typography>
+            <Chip size="small" variant="outlined" label={`${history.length} stored`} />
+          </Stack>
+          <Box className="qp-scroll-x">
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Target</TableCell>
+                  <TableCell align="right">Users</TableCell>
+                  <TableCell align="right">Requests</TableCell>
+                  <TableCell align="right">Req/s</TableCell>
+                  <TableCell align="right">p95</TableCell>
+                  <TableCell align="right">Errors</TableCell>
+                  <TableCell>When</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {history.map((item) => (
+                  <TableRow
+                    key={item.id}
+                    hover
+                    sx={{ cursor: 'pointer' }}
+                    onClick={() => setRun(item)}
+                  >
+                    <TableCell>
+                      <StatusChip runStatus={item.status} />
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 260 }}>
+                      <Typography variant="caption" className="qp-truncate" sx={{ fontFamily: 'var(--font-mono)', display: 'block' }}>
+                        {item.httpMethod} {item.targetUrl}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">{item.virtualUsers}</TableCell>
+                    <TableCell align="right">{item.totalRequests}</TableCell>
+                    <TableCell align="right">{item.requestsPerSecond}</TableCell>
+                    <TableCell align="right">{item.p95LatencyMs} ms</TableCell>
+                    <TableCell align="right">{item.errorRatePercent.toFixed(1)}%</TableCell>
+                    <TableCell>
+                      <Typography variant="caption" color="text.secondary">
+                        {new Date(item.createdAt).toLocaleString()}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
+        </Card>
       )}
     </Stack>
   );

@@ -1,300 +1,175 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
   Button,
-  Card,
-  IconButton,
-  InputAdornment,
-  Link,
+  CircularProgress,
+  Divider,
+  FormControl,
+  InputLabel,
   MenuItem,
+  Select,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import {
-  Bot,
-  Eye,
-  EyeOff,
-  Mail,
-  Lock,
-  User,
-  ShieldCheck,
-  ArrowRight,
-  CheckCircle2,
-} from 'lucide-react';
+import { UserPlus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
 import { extractErrorMessage } from '../../api/httpClient';
-import type { RegisterRequest, UserRole } from '../../types/auth';
+import { AuthShell } from './AuthShell';
+import type { UserRole } from '../../types/auth';
 
-const ROLE_OPTIONS: { value: UserRole; label: string; desc: string }[] = [
-  { value: 'DEVELOPER', label: 'Developer', desc: 'Generate unit, integration & API tests' },
-  { value: 'QA_ENGINEER', label: 'QA Engineer', desc: 'Perform full quality & security analysis' },
-  { value: 'ADMIN', label: 'Admin / Team Lead', desc: 'Full workspace & team access' },
+const ROLES: Array<{ value: UserRole; label: string; hint: string }> = [
+  { value: 'DEVELOPER', label: 'Developer', hint: 'Analyze projects and run tests' },
+  { value: 'QA_ENGINEER', label: 'QA engineer', hint: 'Analyze projects and run tests' },
+  { value: 'QA_LEAD', label: 'QA lead', hint: 'Analyze projects and run tests' },
+  { value: 'ADMIN', label: 'Administrator', hint: 'Also manages the shared AI provider key' },
 ];
 
+const MIN_PASSWORD_LENGTH = 6;
+
 export function RegisterPage() {
-  const { register: registerUser } = useAuth();
-  const { showSuccess } = useToast();
   const navigate = useNavigate();
-  const [serverError, setServerError] = useState<string | null>(null);
+  const { register } = useAuth();
+
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState<UserRole>('QA_ENGINEER');
+  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<RegisterRequest>({ defaultValues: { role: 'DEVELOPER' } });
+  // Validated client-side so the user gets immediate feedback; the server enforces the same rules
+  // independently, since client validation is a convenience and not a guarantee.
+  const passwordTooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
+  const passwordsDiffer = confirmPassword.length > 0 && password !== confirmPassword;
+  const canSubmit =
+    fullName.trim().length > 0 &&
+    email.trim().length > 0 &&
+    password.length >= MIN_PASSWORD_LENGTH &&
+    password === confirmPassword &&
+    !isSubmitting;
 
-  async function onSubmit(values: RegisterRequest) {
-    setServerError(null);
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
     setIsSubmitting(true);
     try {
-      await registerUser(values);
-      showSuccess('Account created successfully! Welcome to QPilot.');
+      await register({ fullName: fullName.trim(), email: email.trim(), password, role });
       navigate('/dashboard', { replace: true });
-    } catch (error) {
-      setServerError(extractErrorMessage(error, 'Could not create your account.'));
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Could not create the account.'));
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'radial-gradient(circle at 90% 20%, rgba(139, 92, 246, 0.15) 0%, transparent 40%), radial-gradient(circle at 10% 80%, rgba(99, 102, 241, 0.15) 0%, transparent 40%), #090D16',
-        p: 2,
-      }}
-    >
-      <Card
-        elevation={0}
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', md: 'row' },
-          width: '100%',
-          maxWidth: 960,
-          borderRadius: 4,
-          overflow: 'hidden',
-          border: '1px solid',
-          borderColor: 'divider',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6)',
-        }}
-      >
-        {/* Left Hero Side */}
-        <Box
-          sx={{
-            flex: 1,
-            p: { xs: 4, md: 5 },
-            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(99, 102, 241, 0.1) 100%)',
-            borderRight: { md: '1px solid' },
-            borderColor: 'divider',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-        >
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 4 }}>
-              <Box
-                sx={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 6px 16px rgba(139, 92, 246, 0.4)',
-                }}
-              >
-                <Bot size={24} color="#FFF" />
-              </Box>
-              <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: '-0.02em' }}>
-                QPilot AI
-              </Typography>
-            </Box>
-
-            <Typography variant="h4" sx={{ fontWeight: 800, mb: 2, lineHeight: 1.2 }}>
-              Get Started with Enterprise AI QA
-            </Typography>
-
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 4, lineHeight: 1.6 }}>
-              Join thousands of software engineers who automate unit tests, integration flows, and security audits with QPilot.
-            </Typography>
-
-            <Stack spacing={2} sx={{ mb: 4 }}>
-              {[
-                'Instant Project & Swagger Parsing',
-                'Comprehensive Risk & Coverage Scoring',
-                'PDF & Markdown Executive Reports',
-                'Continuous Quality Engineering Pipeline',
-              ].map((feat) => (
-                <Box key={feat} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <CheckCircle2 size={18} color="#10B981" />
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {feat}
-                  </Typography>
-                </Box>
-              ))}
-            </Stack>
-          </Box>
-
-          <Box sx={{ pt: 2, borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-            <Typography variant="caption" color="text.secondary">
-              🔒 Enterprise Security Guaranteed • SOC2 Ready Architecture
-            </Typography>
-          </Box>
-        </Box>
-
-        {/* Right Form Side */}
-        <Box sx={{ flex: 1, p: { xs: 4, md: 5 }, bgcolor: 'background.paper', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-            Create Account
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Set up your user account to access the AI quality platform.
-          </Typography>
-
-          {serverError && (
-            <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
-              {serverError}
+    <AuthShell title="Create an account" subtitle="Set up a workspace for your projects and test results.">
+      <Box component="form" onSubmit={handleSubmit} noValidate>
+        <Stack spacing={2}>
+          {error && (
+            <Alert severity="error" variant="outlined" sx={{ borderRadius: 2.5 }}>
+              <Typography variant="body2">{error}</Typography>
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
-            <Stack spacing={2.5}>
-              <TextField
-                label="Full name"
-                fullWidth
-                autoComplete="name"
-                error={!!errors.fullName}
-                helperText={errors.fullName?.message}
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <User size={18} style={{ opacity: 0.6 }} />
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-                {...register('fullName', { required: 'Full name is required' })}
-              />
+          <TextField
+            label="Full name"
+            fullWidth
+            required
+            autoComplete="name"
+            autoFocus
+            value={fullName}
+            onChange={(event) => setFullName(event.target.value)}
+            disabled={isSubmitting}
+          />
+          <TextField
+            label="Email"
+            type="email"
+            fullWidth
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            disabled={isSubmitting}
+            helperText="Email addresses are stored lowercase and must be unique."
+          />
 
-              <TextField
-                label="Email address"
-                type="email"
-                fullWidth
-                autoComplete="email"
-                error={!!errors.email}
-                helperText={errors.email?.message}
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Mail size={18} style={{ opacity: 0.6 }} />
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-                {...register('email', { required: 'Email is required' })}
-              />
+          <FormControl fullWidth size="small">
+            <InputLabel id="register-role">Role</InputLabel>
+            <Select
+              labelId="register-role"
+              value={role}
+              label="Role"
+              onChange={(event) => setRole(event.target.value as UserRole)}
+              disabled={isSubmitting}
+            >
+              {ROLES.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                      {option.label}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {option.hint}
+                    </Typography>
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
-              <TextField
-                label="Password"
-                type={showPassword ? 'text' : 'password'}
-                fullWidth
-                autoComplete="new-password"
-                error={!!errors.password}
-                helperText={errors.password?.message ?? 'At least 6 characters'}
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Lock size={18} style={{ opacity: 0.6 }} />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          type="button"
-                          onClick={() => setShowPassword((prev) => !prev)}
-                          edge="end"
-                          aria-label={showPassword ? 'Hide password' : 'Show password'}
-                          tabIndex={-1}
-                        >
-                          {showPassword ? <EyeOff size={18} color="#6366F1" /> : <Eye size={18} />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-                {...register('password', {
-                  required: 'Password is required',
-                  minLength: { value: 6, message: 'Password must be at least 6 characters' },
-                })}
-              />
+          <TextField
+            label="Password"
+            type="password"
+            fullWidth
+            required
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            disabled={isSubmitting}
+            error={passwordTooShort}
+            helperText={passwordTooShort ? `At least ${MIN_PASSWORD_LENGTH} characters required.` : ' '}
+          />
+          <TextField
+            label="Confirm password"
+            type="password"
+            fullWidth
+            required
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            disabled={isSubmitting}
+            error={passwordsDiffer}
+            helperText={passwordsDiffer ? 'The two passwords do not match.' : ' '}
+          />
 
-              <TextField
-                select
-                label="Primary Role"
-                fullWidth
-                defaultValue="DEVELOPER"
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <ShieldCheck size={18} style={{ opacity: 0.6 }} />
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-                {...register('role')}
-              >
-                {ROLE_OPTIONS.map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {option.label}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {option.desc}
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </TextField>
+          <Button
+            type="submit"
+            variant="contained"
+            size="large"
+            fullWidth
+            startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : <UserPlus size={17} />}
+            disabled={!canSubmit}
+            sx={{ fontWeight: 780, py: 1.15 }}
+          >
+            {isSubmitting ? 'Creating account…' : 'Create account'}
+          </Button>
 
-              <Button
-                type="submit"
-                variant="contained"
-                size="large"
-                disabled={isSubmitting}
-                endIcon={<ArrowRight size={18} />}
-                sx={{ py: 1.4, fontWeight: 700, borderRadius: 2.5 }}
-              >
-                {isSubmitting ? 'Creating Account…' : 'Complete Registration'}
-              </Button>
-            </Stack>
-          </Box>
+          <Divider sx={{ my: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              already registered?
+            </Typography>
+          </Divider>
 
-          <Typography variant="body2" align="center" sx={{ mt: 4, color: 'text.secondary' }}>
-            Already have an account?{' '}
-            <Link component={RouterLink} to="/login" sx={{ fontWeight: 700, color: 'primary.main', textDecoration: 'none' }}>
-              Sign In
-            </Link>
-          </Typography>
-        </Box>
-      </Card>
-    </Box>
+          <Button component={RouterLink} to="/login" variant="outlined" fullWidth sx={{ fontWeight: 700 }}>
+            Sign in instead
+          </Button>
+        </Stack>
+      </Box>
+    </AuthShell>
   );
 }

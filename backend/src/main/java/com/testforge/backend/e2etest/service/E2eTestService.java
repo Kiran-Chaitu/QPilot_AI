@@ -306,47 +306,62 @@ public class E2eTestService {
         return results;
     }
 
+    /**
+     * Probes conventional health-check paths.
+     *
+     * <p>These are reported as a single discovery result rather than one pass/fail per path. Probing five
+     * speculative URLs and marking four "failed" because the application simply does not use those
+     * conventions inflates the failure count with non-findings — the meaningful outcome is whether a
+     * health endpoint was found at all.
+     */
     private List<TestResult> checkApiHealthEndpoints(String targetUrl) {
-        List<TestResult> results = new ArrayList<>();
         URI baseUri = URI.create(targetUrl);
         String baseUrl = baseUri.getScheme() + "://" + baseUri.getAuthority();
 
+        List<String> found = new ArrayList<>();
+        List<String> probed = new ArrayList<>();
+        int bestStatus = 0;
+        long bestLatency = 0;
+
         for (String path : API_HEALTH_PATHS) {
+            probed.add(path);
             try {
-                String healthUrl = baseUrl + path;
-                long start = System.currentTimeMillis();
+                long start = System.nanoTime();
                 HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(healthUrl))
+                        .uri(URI.create(baseUrl + path))
                         .header("User-Agent", USER_AGENT)
                         .timeout(Duration.ofSeconds(5))
                         .GET()
                         .build();
-                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-                long latency = System.currentTimeMillis() - start;
+                HttpResponse<Void> response = httpClient.send(request, HttpResponse.BodyHandlers.discarding());
+                long latency = (System.nanoTime() - start) / 1_000_000;
 
-                boolean ok = response.statusCode() >= 200 && response.statusCode() < 400;
-                results.add(new TestResult(
-                        "API Health: " + path,
-                        "API_HEALTH",
-                        ok,
-                        response.statusCode(),
-                        latency,
-                        ok ? "Endpoint responded with HTTP " + response.statusCode() : null,
-                        ok ? null : "Endpoint returned HTTP " + response.statusCode()
-                ));
-            } catch (Exception ex) {
-                results.add(new TestResult(
-                        "API Health: " + path,
-                        "API_HEALTH",
-                        false,
-                        0,
-                        0,
-                        null,
-                        "Endpoint unreachable: " + ex.getMessage()
-                ));
+                if (response.statusCode() >= 200 && response.statusCode() < 400) {
+                    found.add(path + " (HTTP " + response.statusCode() + ", " + latency + "ms)");
+                    if (bestStatus == 0) {
+                        bestStatus = response.statusCode();
+                        bestLatency = latency;
+                    }
+                }
+            } catch (Exception ignored) {
+                // An unreachable speculative path means the convention is not in use, not a failure.
             }
         }
-        return results;
+
+        if (!found.isEmpty()) {
+            return List.of(new TestResult(
+                    "API Health Endpoint Discovery", "API_HEALTH", true, bestStatus, bestLatency,
+                    "Found " + found.size() + " responding health endpoint(s): " + String.join(", ", found),
+                    null));
+        }
+        // Passed=true because the probe itself worked; the details make clear nothing was found, which is
+        // information rather than a defect in the target.
+        return List.of(new TestResult(
+                "API Health Endpoint Discovery", "API_HEALTH", true, 0, 0,
+                "No health endpoint responded at any of the conventional paths probed ("
+                        + String.join(", ", probed) + "). This is not a defect — the application may expose "
+                        + "health checks elsewhere, or not at all.",
+                null));
     }
 
     private List<TestResult> checkSecurityHeaders(String targetUrl) {

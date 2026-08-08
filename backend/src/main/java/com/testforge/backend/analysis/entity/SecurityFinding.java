@@ -38,6 +38,31 @@ public class SecurityFinding {
 
     private String location;
 
+    /** Provenance — scanned evidence vs. AI suggestion. Never inferred; always set explicitly. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ResultOrigin origin = ResultOrigin.STATIC_ANALYSIS;
+
+    /** 1-based line number within {@link #location}, when the finding came from a real file match. */
+    private Integer lineNumber;
+
+    /**
+     * The actual source line that triggered the rule, truncated. This is what makes a
+     * {@link ResultOrigin#STATIC_ANALYSIS} finding verifiable: the user can open the cited file at the
+     * cited line and see the same text. AI suggestions leave this null.
+     */
+    @Column(length = 500)
+    private String evidence;
+
+    /** Rule identifier that produced this finding, so results are traceable back to a specific check. */
+    private String ruleId;
+
+    /**
+     * How many times this rule matched across the project. The row itself reports one representative
+     * occurrence; this count keeps the total honest when matches are capped for display.
+     */
+    private Integer occurrenceCount;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -67,6 +92,21 @@ public class SecurityFinding {
 
     public String getLocation() { return location; }
     public void setLocation(String location) { this.location = location; }
+
+    public ResultOrigin getOrigin() { return origin; }
+    public void setOrigin(ResultOrigin origin) { this.origin = origin; }
+
+    public Integer getLineNumber() { return lineNumber; }
+    public void setLineNumber(Integer lineNumber) { this.lineNumber = lineNumber; }
+
+    public String getEvidence() { return evidence; }
+    public void setEvidence(String evidence) { this.evidence = evidence; }
+
+    public String getRuleId() { return ruleId; }
+    public void setRuleId(String ruleId) { this.ruleId = ruleId; }
+
+    public Integer getOccurrenceCount() { return occurrenceCount; }
+    public void setOccurrenceCount(Integer occurrenceCount) { this.occurrenceCount = occurrenceCount; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

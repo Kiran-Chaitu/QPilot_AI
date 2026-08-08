@@ -1,34 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   AppBar,
   Avatar,
   Box,
   Button,
   Chip,
+  Divider,
   IconButton,
   Menu,
   MenuItem,
   Toolbar,
-  Typography,
   Tooltip,
-  Divider,
+  Typography,
 } from '@mui/material';
-import {
-  Menu as MenuIcon,
-  Search,
-  Sun,
-  Moon,
-  Bell,
-  LogOut,
-  Shield,
-  Sparkles,
-  Settings,
-} from 'lucide-react';
+import { LogOut, Menu as MenuIcon, Moon, Search, Settings, Shield, Sparkles, Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAppTheme } from '../../theme/ThemeContext';
 import { getAiConfig, type AiConfig } from '../../api/aiApi';
 import { AiSettingsModal } from '../common/AiSettingsModal';
+import { brand } from '../../theme/palette';
 
 interface NavbarProps {
   onMobileDrawerToggle: () => void;
@@ -44,32 +35,29 @@ export const Navbar: React.FC<NavbarProps> = ({ onMobileDrawerToggle, onOpenSear
   const [aiConfig, setAiConfig] = useState<AiConfig | null>(null);
   const [aiModalOpen, setAiModalOpen] = useState(false);
 
-  useEffect(() => {
-    fetchAiConfig();
+  const fetchAiConfig = useCallback(async () => {
+    try {
+      setAiConfig(await getAiConfig());
+    } catch {
+      // The status chip is informational; a failure here must not break the navigation bar.
+      setAiConfig(null);
+    }
   }, []);
 
-  async function fetchAiConfig() {
-    try {
-      const config = await getAiConfig();
-      setAiConfig(config);
-    } catch {
-      // ignore
-    }
-  }
-
-  const handleOpenMenu = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleCloseMenu = () => {
-    setAnchorEl(null);
-  };
+  useEffect(() => {
+    fetchAiConfig();
+  }, [fetchAiConfig]);
 
   const handleLogout = () => {
-    handleCloseMenu();
+    setAnchorEl(null);
     logout();
     navigate('/login', { replace: true });
   };
+
+  const aiConfigured = aiConfig?.provider === 'gemini';
+  // Only an administrator can change the process-wide API key, so the control is hidden for everyone
+  // else rather than shown and then rejected with a 403.
+  const canConfigureAi = user?.role === 'ADMIN';
 
   return (
     <>
@@ -77,133 +65,96 @@ export const Navbar: React.FC<NavbarProps> = ({ onMobileDrawerToggle, onOpenSear
         position="static"
         color="default"
         elevation={0}
-        sx={{
-          bgcolor: 'background.paper',
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          backdropFilter: 'blur(12px)',
-        }}
+        className="qp-glass"
+        sx={{ borderBottom: '1px solid', borderColor: 'divider', backgroundImage: 'none' }}
       >
-        <Toolbar sx={{ gap: 1, minHeight: 64, px: { xs: 2, md: 3 } }}>
-          {/* Mobile menu toggle */}
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            edge="start"
-            onClick={onMobileDrawerToggle}
-            sx={{ display: { md: 'none' }, mr: 1 }}
-          >
-            <MenuIcon size={22} />
+        <Toolbar sx={{ gap: 1, minHeight: 62, px: { xs: 1.5, md: 2.5 } }}>
+          <IconButton onClick={onMobileDrawerToggle} sx={{ display: { md: 'none' } }} aria-label="Open navigation">
+            <MenuIcon size={21} />
           </IconButton>
 
-          {/* Global Search Bar Button */}
           <Box
             onClick={onOpenSearch}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') onOpenSearch();
+            }}
             sx={{
               display: { xs: 'none', sm: 'flex' },
               alignItems: 'center',
-              gap: 1.5,
-              px: 2,
-              py: 0.8,
-              borderRadius: 3,
+              gap: 1.25,
+              px: 1.75,
+              py: 0.7,
+              borderRadius: 2.5,
               bgcolor: 'action.hover',
               border: '1px solid',
               borderColor: 'divider',
               cursor: 'pointer',
-              width: { sm: 260, md: 320 },
-              transition: 'all 0.2s ease',
-              '&:hover': {
-                borderColor: 'primary.main',
-                bgcolor: 'action.selected',
-              },
+              width: { sm: 240, md: 320 },
+              transition: 'border-color 160ms ease',
+              '&:hover': { borderColor: 'primary.main' },
             }}
           >
-            <Search size={18} style={{ opacity: 0.6 }} />
+            <Search size={16} style={{ opacity: 0.6 }} />
             <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1, fontWeight: 500 }}>
-              Search projects, tests, tools...
+              Search projects…
             </Typography>
-            <Chip label="⌘K" size="small" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />
+            <Chip label="⌘K" size="small" variant="outlined" sx={{ height: 19, fontSize: '0.62rem' }} />
           </Box>
 
           <Box sx={{ flexGrow: 1 }} />
 
-          {/* AI Engine Status Button */}
-          <Tooltip title="Click to configure Gemini API Key or AI Model">
+          {/* Reports the actual provider state — not a fixed "AI active" badge. */}
+          <Tooltip title={aiConfig?.statusMessage ?? 'Checking AI provider configuration…'}>
             <Chip
-              icon={<Sparkles size={14} color={aiConfig?.provider === 'gemini' ? '#10B981' : '#6366F1'} />}
-              label={aiConfig?.provider === 'gemini' ? 'Gemini AI Active' : 'Smart Offline AI'}
-              color={aiConfig?.provider === 'gemini' ? 'success' : 'primary'}
+              icon={<Sparkles size={13} color={aiConfigured ? brand.secondary : undefined} />}
+              label={aiConfigured ? 'AI enrichment on' : 'Static analysis only'}
+              color={aiConfigured ? 'secondary' : 'default'}
               variant="outlined"
               size="small"
-              onClick={() => setAiModalOpen(true)}
-              sx={{
-                fontWeight: 700,
-                cursor: 'pointer',
-                px: 0.5,
-                transition: 'all 0.2s ease',
-                '&:hover': { transform: 'scale(1.03)' },
-              }}
+              onClick={canConfigureAi ? () => setAiModalOpen(true) : undefined}
+              sx={{ fontWeight: 700, display: { xs: 'none', sm: 'flex' }, cursor: canConfigureAi ? 'pointer' : 'help' }}
             />
           </Tooltip>
 
-          {/* Settings Trigger */}
-          <Tooltip title="AI & System Settings">
-            <IconButton onClick={() => setAiModalOpen(true)} color="inherit">
-              <Settings size={20} />
-            </IconButton>
-          </Tooltip>
-
-          {/* Search button mobile */}
-          <IconButton onClick={onOpenSearch} sx={{ display: { xs: 'flex', sm: 'none' } }}>
-            <Search size={20} />
+          <IconButton onClick={onOpenSearch} sx={{ display: { xs: 'flex', sm: 'none' } }} aria-label="Search">
+            <Search size={19} />
           </IconButton>
 
-          {/* Theme Toggle Button */}
-          <Tooltip title={`Switch to ${mode === 'dark' ? 'Light' : 'Dark'} Mode`}>
-            <IconButton onClick={toggleTheme} color="inherit">
-              {mode === 'dark' ? <Sun size={20} color="#F59E0B" /> : <Moon size={20} color="#6366F1" />}
+          <Tooltip title={`Switch to ${mode === 'dark' ? 'light' : 'dark'} theme`}>
+            <IconButton onClick={toggleTheme} aria-label="Toggle colour theme">
+              {mode === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
             </IconButton>
           </Tooltip>
 
-          {/* Notifications */}
-          <Tooltip title="Notifications">
-            <IconButton color="inherit">
-              <Bell size={20} />
-            </IconButton>
-          </Tooltip>
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.75, my: 1.5, display: { xs: 'none', sm: 'block' } }} />
 
-          <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1.5 }} />
-
-          {/* User Profile */}
           {user ? (
             <>
               <Button
-                onClick={handleOpenMenu}
-                sx={{
-                  p: 0.5,
-                  borderRadius: 3,
-                  color: 'text.primary',
-                  '&:hover': { bgcolor: 'action.hover' },
-                }}
+                onClick={(event) => setAnchorEl(event.currentTarget)}
+                sx={{ p: 0.5, borderRadius: 2.5, color: 'text.primary', '&:hover': { bgcolor: 'action.hover' } }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, textTransform: 'none' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
                   <Avatar
                     sx={{
-                      width: 36,
-                      height: 36,
-                      background: 'linear-gradient(135deg, #6366F1 0%, #10B981 100%)',
-                      fontWeight: 700,
-                      fontSize: 14,
+                      width: 33,
+                      height: 33,
+                      fontWeight: 750,
+                      fontSize: 13,
+                      background: `linear-gradient(135deg, ${brand.primary} 0%, ${brand.secondary} 100%)`,
+                      color: '#0B0C12',
                     }}
                   >
-                    {user.fullName ? user.fullName.charAt(0).toUpperCase() : 'U'}
+                    {user.fullName?.charAt(0).toUpperCase() ?? 'U'}
                   </Avatar>
-                  <Box sx={{ textAlign: 'left', display: { xs: 'none', sm: 'block' } }}>
+                  <Box sx={{ textAlign: 'left', display: { xs: 'none', md: 'block' } }}>
                     <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
                       {user.fullName}
                     </Typography>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.72rem' }}>
-                      {user.role.replace('_', ' ')}
+                    <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                      {user.role.replace(/_/g, ' ')}
                     </Typography>
                   </Box>
                 </Box>
@@ -212,64 +163,47 @@ export const Navbar: React.FC<NavbarProps> = ({ onMobileDrawerToggle, onOpenSear
               <Menu
                 anchorEl={anchorEl}
                 open={Boolean(anchorEl)}
-                onClose={handleCloseMenu}
-                onClick={handleCloseMenu}
-                slotProps={{
-                  paper: {
-                    sx: {
-                      mt: 1.5,
-                      minWidth: 200,
-                      borderRadius: 3,
-                      boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                    },
-                  },
-                }}
+                onClose={() => setAnchorEl(null)}
                 transformOrigin={{ horizontal: 'right', vertical: 'top' }}
                 anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                slotProps={{ paper: { sx: { mt: 1.25, minWidth: 232, borderRadius: 3, border: '1px solid', borderColor: 'divider' } } }}
               >
                 <Box sx={{ px: 2, py: 1.5 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 750 }}>
                     {user.fullName}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflowWrap: 'anywhere' }}>
                     {user.email}
                   </Typography>
-                  <Chip
-                    icon={<Shield size={12} />}
-                    label={user.role}
-                    size="small"
-                    color="primary"
-                    sx={{ mt: 1, height: 20, fontSize: '0.65rem' }}
-                  />
+                  <Chip icon={<Shield size={11} />} label={user.role.replace(/_/g, ' ')} size="small" color="primary" sx={{ mt: 1, height: 20, fontSize: '0.64rem' }} />
                 </Box>
                 <Divider />
-                <MenuItem onClick={() => setAiModalOpen(true)}>
-                  <Settings size={16} style={{ marginRight: 10 }} />
-                  AI Settings & API Key
-                </MenuItem>
-                <Divider />
+                {canConfigureAi && (
+                  <MenuItem
+                    onClick={() => {
+                      setAnchorEl(null);
+                      setAiModalOpen(true);
+                    }}
+                  >
+                    <Settings size={15} style={{ marginRight: 10 }} />
+                    AI configuration
+                  </MenuItem>
+                )}
                 <MenuItem onClick={handleLogout} sx={{ color: 'error.main' }}>
-                  <LogOut size={16} style={{ marginRight: 10 }} />
-                  Logout
+                  <LogOut size={15} style={{ marginRight: 10 }} />
+                  Sign out
                 </MenuItem>
               </Menu>
             </>
           ) : (
-            <Button variant="contained" color="primary" onClick={() => navigate('/login')}>
-              Sign In
+            <Button variant="contained" onClick={() => navigate('/login')}>
+              Sign in
             </Button>
           )}
         </Toolbar>
       </AppBar>
 
-      {/* AI Settings Dialog */}
-      <AiSettingsModal
-        open={aiModalOpen}
-        onClose={() => setAiModalOpen(false)}
-        onConfigChanged={fetchAiConfig}
-      />
+      <AiSettingsModal open={aiModalOpen} onClose={() => setAiModalOpen(false)} onConfigChanged={fetchAiConfig} />
     </>
   );
 };

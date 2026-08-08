@@ -69,16 +69,31 @@ public final class JsonSchemas {
             }
             """;
 
-    public static final String RISK_SCORE = """
+    /**
+     * Recommendations schema. Note it asks for no scores or percentages: the model is given QPilot's
+     * measured numbers as input and asked to advise on them, never to produce competing metrics.
+     */
+    public static final String RECOMMENDATIONS = """
             {
               "type": "OBJECT",
               "properties": {
-                "score": {"type": "INTEGER", "description": "overall risk score from 0 (safe) to 100 (critical)"},
-                "reasons": {"type": "ARRAY", "items": {"type": "STRING"}},
-                "coverageEstimatePercent": {"type": "INTEGER", "description": "estimated percent of the codebase likely covered by tests"},
-                "coverageGaps": {"type": "ARRAY", "items": {"type": "STRING"}}
+                "priorityActions": {
+                  "type": "ARRAY",
+                  "description": "Ordered, concrete next actions, most valuable first",
+                  "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                      "title": {"type": "STRING"},
+                      "rationale": {"type": "STRING", "description": "why this matters, referencing the supplied measurements"},
+                      "effort": {"type": "STRING", "enum": ["LOW", "MEDIUM", "HIGH"]}
+                    },
+                    "required": ["title", "rationale"]
+                  }
+                },
+                "testStrategy": {"type": "STRING", "description": "2-4 sentences on how to approach testing this specific project"},
+                "riskExplanation": {"type": "STRING", "description": "plain-English interpretation of the supplied measured risk inputs"}
               },
-              "required": ["score", "reasons", "coverageEstimatePercent", "coverageGaps"]
+              "required": ["priorityActions"]
             }
             """;
 }

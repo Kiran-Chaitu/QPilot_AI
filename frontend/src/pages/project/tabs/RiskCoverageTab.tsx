@@ -1,168 +1,276 @@
-import { Box, Card, CardContent, Chip, Grid, List, ListItem, ListItemIcon, ListItemText, Stack, Typography } from '@mui/material';
-import { AlertTriangle, ShieldAlert, Sparkles } from 'lucide-react';
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import {
+  Alert,
+  Box,
+  Card,
+  Chip,
+  Grid,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableRow,
+  Tooltip,
+  Typography,
+} from '@mui/material';
+import { Calculator, Info, ShieldAlert, Target, TrendingUp } from 'lucide-react';
+import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
+import { EmptyState } from '../../../components/common/StateViews';
+import { riskColor, riskLabel, status as statusColors } from '../../../theme/palette';
 import type { RiskAssessmentResponse } from '../../../types/analysis';
 
-function riskColor(score: number): string {
-  if (score >= 70) return '#EF4444';
-  if (score >= 40) return '#F59E0B';
-  return '#10B981';
+function Gauge({ value, color, caption, label }: { value: number; color: string; caption: string; label: string }) {
+  const data = [
+    { name: label, value },
+    { name: 'remainder', value: Math.max(0, 100 - value) },
+  ];
+  return (
+    <Box sx={{ position: 'relative', width: '100%', height: 190, display: 'grid', placeItems: 'center' }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            innerRadius={62}
+            outerRadius={84}
+            startAngle={90}
+            endAngle={-270}
+            paddingAngle={1.5}
+            stroke="none"
+            isAnimationActive={false}
+          >
+            <Cell fill={color} />
+            <Cell fill="var(--qp-border)" />
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+      <Box sx={{ position: 'absolute', textAlign: 'center', pointerEvents: 'none' }}>
+        <Typography variant="h3" sx={{ color, fontWeight: 800, lineHeight: 1 }}>
+          {value}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+          {caption}
+        </Typography>
+      </Box>
+    </Box>
+  );
 }
 
-function riskLabel(score: number): string {
-  if (score >= 70) return 'High Risk Index';
-  if (score >= 40) return 'Moderate Risk Profile';
-  return 'Low Vulnerability Index';
-}
-
+/**
+ * Risk and test-surface view.
+ *
+ * <p>Two things are load-bearing here. The score is always shown next to the arithmetic that produced it,
+ * so a user can disagree with a specific contribution rather than dismissing the number as arbitrary. And
+ * the tested-surface percentage is always labelled with what it actually measured — it is explicitly not
+ * executed line coverage, which QPilot does not measure and therefore does not claim.
+ */
 export function RiskCoverageTab({ risk }: { risk?: RiskAssessmentResponse }) {
   if (!risk) {
     return (
-      <Box sx={{ textAlign: 'center', py: 8 }}>
-        <ShieldAlert size={48} color="#10B981" style={{ marginBottom: 12, opacity: 0.8 }} />
-        <Typography variant="h6" sx={{ fontWeight: 800 }}>
-          No Risk & Coverage Model Generated
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 400, mx: 'auto', mt: 0.5 }}>
-          Run AI Multi-Agent Audit from the Overview tab to calculate repository risk indices and surface test coverage gaps.
-        </Typography>
-      </Box>
+      <Card>
+        <EmptyState
+          icon={<ShieldAlert size={24} />}
+          title="No risk assessment yet"
+          description="Run an analysis to compute a risk score from measured facts about your project — findings by severity, and how much of the discovered test surface has tests."
+        />
+      </Card>
     );
   }
 
   const color = riskColor(risk.score);
-  const riskData = [
-    { name: 'Risk Score', value: risk.score },
-    { name: 'Safe Profile', value: 100 - risk.score },
-  ];
-  const coverageData = [
-    { name: 'Estimated Coverage', value: risk.coverageEstimatePercent },
-    { name: 'Coverage Gap', value: 100 - risk.coverageEstimatePercent },
-  ];
+  const measured = risk.measured;
 
   return (
-    <Grid container spacing={3}>
-      {/* Risk Score Gauge */}
-      <Grid size={{ xs: 12, sm: 6 }}>
-        <Card sx={{ p: 2.5, textAlign: 'center', height: '100%' }}>
-          <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
-            Calculated System Risk Index
-          </Typography>
-          <Box sx={{ width: '100%', height: 210, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={riskData} dataKey="value" innerRadius={65} outerRadius={88} startAngle={90} endAngle={-270} paddingAngle={2}>
-                  <Cell fill={color} />
-                  <Cell fill="rgba(255,255,255,0.08)" />
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#121215', borderRadius: 8, color: '#FAFAFA' }} />
-              </PieChart>
-            </ResponsiveContainer>
-            <Box
-              sx={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                textAlign: 'center',
-              }}
-            >
-              <Typography variant="h3" sx={{ color, fontWeight: 800, lineHeight: 1 }}>
-                {risk.score}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                OUT OF 100
-              </Typography>
-            </Box>
-          </Box>
-          <Chip label={riskLabel(risk.score)} sx={{ bgcolor: `${color}22`, color, fontWeight: 800, border: `1px solid ${color}44` }} />
-        </Card>
-      </Grid>
-
-      {/* Coverage Gauge */}
-      <Grid size={{ xs: 12, sm: 6 }}>
-        <Card sx={{ p: 2.5, textAlign: 'center', height: '100%' }}>
-          <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
-            AI Code Test Coverage Estimate
-          </Typography>
-          <Box sx={{ width: '100%', height: 210, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={coverageData} dataKey="value" innerRadius={65} outerRadius={88} startAngle={90} endAngle={-270} paddingAngle={2}>
-                  <Cell fill="#10B981" />
-                  <Cell fill="rgba(255,255,255,0.08)" />
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#121215', borderRadius: 8, color: '#FAFAFA' }} />
-              </PieChart>
-            </ResponsiveContainer>
-            <Box
-              sx={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                textAlign: 'center',
-              }}
-            >
-              <Typography variant="h3" sx={{ color: '#10B981', fontWeight: 800, lineHeight: 1 }}>
-                {risk.coverageEstimatePercent}%
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                ESTIMATED COVERAGE
-              </Typography>
-            </Box>
-          </Box>
-          <Chip icon={<Sparkles size={14} color="#10B981" />} label="RAG Semantic Analysis" variant="outlined" color="primary" sx={{ fontWeight: 700 }} />
-        </Card>
-      </Grid>
-
-      {/* Risk Reasons */}
-      <Grid size={{ xs: 12, sm: 6 }}>
-        <Card sx={{ p: 2.5, height: '100%' }}>
-          <CardContent sx={{ p: 0 }}>
-            <Stack direction="row" spacing={1} sx={{ mb: 2, alignItems: 'center' }}>
-              <AlertTriangle color="#F59E0B" size={20} />
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                Risk Factors & Drivers
+    <Stack spacing={2.5}>
+      <Grid container spacing={2.5}>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Card sx={{ p: 2.5, height: '100%', textAlign: 'center' }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center', mb: 0.5 }}>
+              <ShieldAlert size={18} color={color} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                Risk score
               </Typography>
             </Stack>
-            <List dense disablePadding>
-              {risk.reasons.map((reason, idx) => (
-                <ListItem key={idx} disableGutters sx={{ py: 0.8 }}>
-                  <ListItemIcon sx={{ minWidth: 26 }}>
-                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#F59E0B' }} />
-                  </ListItemIcon>
-                  <ListItemText primary={<Typography variant="body2" sx={{ fontWeight: 600 }}>{reason}</Typography>} />
-                </ListItem>
-              ))}
-            </List>
-          </CardContent>
-        </Card>
-      </Grid>
+            <Gauge value={risk.score} color={color} caption="OUT OF 100" label="Risk" />
+            <Chip
+              label={riskLabel(risk.score)}
+              sx={{ bgcolor: `${color}1F`, color, fontWeight: 800, border: `1px solid ${color}44` }}
+            />
+          </Card>
+        </Grid>
 
-      {/* Coverage Gaps */}
-      <Grid size={{ xs: 12, sm: 6 }}>
-        <Card sx={{ p: 2.5, height: '100%' }}>
-          <CardContent sx={{ p: 0 }}>
-            <Stack direction="row" spacing={1} sx={{ mb: 2, alignItems: 'center' }}>
-              <ShieldAlert color="#EF4444" size={20} />
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                Uncovered Vulnerability & Gap Map
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Card sx={{ p: 2.5, height: '100%', textAlign: 'center' }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'center', mb: 0.5 }}>
+              <Target size={18} color={statusColors.success} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                Tested surface
               </Typography>
             </Stack>
-            <List dense disablePadding>
-              {risk.coverageGaps.map((gap, idx) => (
-                <ListItem key={idx} disableGutters sx={{ py: 0.8 }}>
-                  <ListItemIcon sx={{ minWidth: 26 }}>
-                    <AlertTriangle size={16} color="#EF4444" />
-                  </ListItemIcon>
-                  <ListItemText primary={<Typography variant="body2" color="text.secondary">{gap}</Typography>} />
-                </ListItem>
+            <Gauge value={risk.testedSurfacePercent} color={statusColors.success} caption="MEASURED" label="Tested" />
+            <Tooltip title={risk.testedSurfaceBasis ?? ''}>
+              <Chip
+                variant="outlined"
+                label="What does this measure?"
+                sx={{ fontWeight: 700, cursor: 'help' }}
+              />
+            </Tooltip>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Card sx={{ p: 2.5, height: '100%' }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5 }}>
+              <Calculator size={18} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                How the score was calculated
+              </Typography>
+            </Stack>
+            <Stack spacing={0.75}>
+              {risk.scoreBreakdown.map((line, index) => (
+                <Typography
+                  key={index}
+                  variant="caption"
+                  sx={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.72rem',
+                    fontWeight: index === risk.scoreBreakdown.length - 1 ? 800 : 500,
+                    color: index === risk.scoreBreakdown.length - 1 ? color : 'text.secondary',
+                  }}
+                >
+                  {line}
+                </Typography>
               ))}
-            </List>
-          </CardContent>
-        </Card>
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
+              A fixed formula over counted facts — no model estimated this number, and re-running the analysis on the
+              same code produces the same score.
+            </Typography>
+          </Card>
+        </Grid>
       </Grid>
-    </Grid>
+
+      {/* What "tested surface" means, stated in full rather than hidden in a tooltip. */}
+      <Alert severity="info" variant="outlined" icon={<Info size={18} />} sx={{ borderRadius: 3 }}>
+        <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
+          This is not executed code coverage
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          {risk.testedSurfaceBasis} Real line coverage requires running your test suite under an instrumentation agent,
+          which QPilot does not do for uploaded archives.
+        </Typography>
+      </Alert>
+
+      <Grid container spacing={2.5}>
+        {measured && (
+          <Grid size={{ xs: 12, md: 5 }}>
+            <Card sx={{ p: 2.5, height: '100%' }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5 }}>
+                <TrendingUp size={18} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                  Measured inputs
+                </Typography>
+              </Stack>
+              <Table size="small">
+                <TableBody>
+                  {[
+                    ['Source files', measured.sourceFileCount],
+                    ['Test files', measured.testFileCount],
+                    ['Non-blank lines of code', measured.totalLinesOfCode],
+                    ['HTTP endpoints discovered', measured.endpointCount],
+                    ['Endpoints referenced by tests', measured.endpointsReferencedByTests],
+                  ].map(([label, value]) => (
+                    <TableRow key={String(label)}>
+                      <TableCell sx={{ border: 'none', pl: 0, color: 'text.secondary' }}>{label}</TableCell>
+                      <TableCell align="right" sx={{ border: 'none', pr: 0, fontWeight: 750 }}>
+                        {String(value)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, mt: 1.5 }}>
+                {[
+                  ['CRITICAL', measured.criticalFindingCount],
+                  ['HIGH', measured.highFindingCount],
+                  ['MEDIUM', measured.mediumFindingCount],
+                  ['LOW', measured.lowFindingCount],
+                ].map(([label, count]) => (
+                  <Chip key={String(label)} size="small" variant="outlined" label={`${label}: ${count}`} sx={{ fontWeight: 700 }} />
+                ))}
+              </Stack>
+            </Card>
+          </Grid>
+        )}
+
+        <Grid size={{ xs: 12, md: measured ? 7 : 12 }}>
+          <Stack spacing={2.5} sx={{ height: '100%' }}>
+            <Card sx={{ p: 2.5 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 750, mb: 1.5 }}>
+                Risk drivers
+              </Typography>
+              <Stack spacing={1}>
+                {risk.reasons.map((reason, index) => (
+                  <Stack key={index} direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                    <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: color, mt: '7px', flexShrink: 0 }} />
+                    <Typography variant="body2" color="text.secondary">
+                      {reason}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
+            </Card>
+
+            {risk.coverageGaps.length > 0 && (
+              <Card sx={{ p: 2.5, flexGrow: 1 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5 }}>
+                  <Target size={18} color={statusColors.warning} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+                    Untested endpoints &amp; areas
+                  </Typography>
+                  <Chip size="small" variant="outlined" label={risk.coverageGaps.length} />
+                </Stack>
+                <Box sx={{ maxHeight: 240, overflowY: 'auto' }}>
+                  <Stack spacing={0.75}>
+                    {risk.coverageGaps.map((gap, index) => (
+                      <Typography
+                        key={index}
+                        variant="caption"
+                        sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.73rem', overflowWrap: 'anywhere' }}
+                      >
+                        • {gap}
+                      </Typography>
+                    ))}
+                  </Stack>
+                </Box>
+              </Card>
+            )}
+          </Stack>
+        </Grid>
+      </Grid>
+
+      {risk.unavailableChecks.length > 0 && (
+        <Card sx={{ p: 2.5 }}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+            <Info size={18} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 750 }}>
+              Checks not performed
+            </Typography>
+          </Stack>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+            Listed explicitly, because an absent section would read as a clean result.
+          </Typography>
+          <Stack spacing={1}>
+            {risk.unavailableChecks.map((check, index) => (
+              <Paper key={index} sx={{ p: 1.5, borderRadius: 2.5, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="caption" color="text.secondary">
+                  {check}
+                </Typography>
+              </Paper>
+            ))}
+          </Stack>
+        </Card>
+      )}
+    </Stack>
   );
 }

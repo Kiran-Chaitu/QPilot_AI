@@ -1,13 +1,12 @@
 import {
+  Alert,
   Box,
   Button,
   Card,
   Chip,
+  CircularProgress,
   Grid,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
+  LinearProgress,
   Paper,
   Stack,
   Table,
@@ -17,263 +16,338 @@ import {
   TableRow,
   Typography,
 } from '@mui/material';
-import {
-  Play,
-  CheckCircle2,
-  AlertCircle,
-  FileCode2,
-  Layers,
-  Code2,
-  Cpu,
-  Sparkles,
-  Zap,
-} from 'lucide-react';
-import { StatusChip } from '../../../components/common/StatusChip';
+import { Bot, Code2, FileSearch, Info, Layers, Play, Sparkles } from 'lucide-react';
+import { EmptyState, NotAvailable } from '../../../components/common/StateViews';
+import { brand, status as statusColors } from '../../../theme/palette';
 import type { ProjectResponse, ProjectStructureSummary } from '../../../types/project';
 import type { AnalysisResultResponse } from '../../../types/analysis';
 
-interface OverviewTabProps {
-  detail: { project: ProjectResponse; structure: ProjectStructureSummary };
+const METHOD_COLORS: Record<string, string> = {
+  GET: statusColors.success,
+  POST: brand.primary,
+  PUT: statusColors.warning,
+  PATCH: statusColors.warning,
+  DELETE: statusColors.error,
+};
+
+function StatTile({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
+  return (
+    <Paper sx={{ p: 1.75, borderRadius: 3, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider', height: '100%' }}>
+      <Typography variant="overline" color="text.secondary" sx={{ display: 'block', lineHeight: 1.4 }}>
+        {label}
+      </Typography>
+      <Typography variant="h6" sx={{ fontWeight: 800, my: 0.25 }}>
+        {value}
+      </Typography>
+      {hint && (
+        <Typography variant="caption" color="text.secondary">
+          {hint}
+        </Typography>
+      )}
+    </Paper>
+  );
+}
+
+export function OverviewTab({
+  project,
+  structure,
+  analysis,
+  onAnalyze,
+  isAnalyzing,
+}: {
+  project: ProjectResponse;
+  structure: ProjectStructureSummary | null;
   analysis: AnalysisResultResponse | null;
   onAnalyze: () => void;
   isAnalyzing: boolean;
-}
-
-export function OverviewTab({ detail, analysis, onAnalyze, isAnalyzing }: OverviewTabProps) {
-  const { project, structure } = detail;
+}) {
+  const run = analysis?.run;
+  const isUrlProject = project.sourceType === 'WEBSITE_URL' || project.sourceType === 'API_URL';
 
   return (
-    <Grid container spacing={3}>
-      {/* Left Column: Repository Structure & API Map */}
-      <Grid size={{ xs: 12, md: 7 }}>
-        <Card sx={{ p: 2.5, mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Layers size={20} color="#10B981" />
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                Repository & Tech Stack Profile
+    <Grid container spacing={2.5}>
+      {/* ── Structure (real counts) ────────────────────────────────────── */}
+      <Grid size={{ xs: 12, lg: 7 }}>
+        <Stack spacing={2.5}>
+          <Card sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2 }}>
+              <Layers size={18} color={brand.primary} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                Project structure
               </Typography>
-            </Box>
-            <StatusChip status={project.status} />
-          </Box>
+              <Chip size="small" variant="outlined" color="secondary" label="Counted from your files" sx={{ fontWeight: 700 }} />
+            </Stack>
 
-          <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid size={4}>
-              <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                  PRIMARY LANGUAGE
-                </Typography>
-                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'primary.main', mt: 0.5 }}>
-                  {structure.primaryLanguage ?? 'Auto-Detected'}
-                </Typography>
-              </Paper>
+            <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <StatTile label="Primary language" value={structure?.primaryLanguage ?? 'Unknown'} />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <StatTile
+                  label="Files indexed"
+                  value={
+                    isUrlProject && (structure?.totalFiles ?? 0) === 0 ? (
+                      <NotAvailable reason="This is a URL-based project — no source archive was downloaded, so there are no files to count. Upload a ZIP to enable source metrics." />
+                    ) : (
+                      structure?.totalFiles ?? 0
+                    )
+                  }
+                />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <StatTile label="Endpoints found" value={structure?.endpoints.length ?? 0} hint="by route scanning" />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <StatTile
+                  label="Dependencies"
+                  value={
+                    isUrlProject && (structure?.dependencies.length ?? 0) === 0 ? (
+                      <NotAvailable reason="Dependency manifests are not reachable over HTTP. Upload the source archive to parse them." />
+                    ) : (
+                      structure?.dependencies.length ?? 0
+                    )
+                  }
+                  hint="from manifests"
+                />
+              </Grid>
             </Grid>
-            <Grid size={4}>
-              <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                  TOTAL FILES INDEXED
-                </Typography>
-                <Typography variant="subtitle1" sx={{ fontWeight: 800, mt: 0.5 }}>
-                  {structure.totalFiles} Files
-                </Typography>
-              </Paper>
-            </Grid>
-            <Grid size={4}>
-              <Paper sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
-                  API ENDPOINTS
-                </Typography>
-                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: 'secondary.main', mt: 0.5 }}>
-                  {structure.endpoints.length} Endpoints
-                </Typography>
-              </Paper>
-            </Grid>
-          </Grid>
 
-          {Object.keys(structure.languageBreakdown).length > 0 && (
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 1 }}>
-                LANGUAGE DISTRIBUTION
-              </Typography>
-              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-                {Object.entries(structure.languageBreakdown).map(([lang, count]) => (
-                  <Chip
-                    key={lang}
-                    size="small"
-                    label={`${lang}: ${count}`}
-                    sx={{ fontWeight: 700, borderRadius: 1.5 }}
-                  />
-                ))}
-              </Stack>
-            </Box>
-          )}
-
-          {structure.dependencies.length > 0 && (
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 1 }}>
-                DETECTED DEPENDENCIES & LIBRARIES
-              </Typography>
-              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-                {structure.dependencies.slice(0, 16).map((dep) => (
-                  <Chip
-                    key={dep}
-                    size="small"
-                    variant="outlined"
-                    label={dep}
-                    sx={{ fontWeight: 600, borderRadius: 1.5, fontSize: '0.75rem' }}
-                  />
-                ))}
-              </Stack>
-            </Box>
-          )}
-
-          {structure.endpoints.length > 0 && (
-            <Box sx={{ mt: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-                <Code2 size={18} color="#3B82F6" />
-                <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                  Discovered API Route Handlers
+            {structure && Object.keys(structure.languageBreakdown).length > 0 && (
+              <Box sx={{ mb: 2.5 }}>
+                <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                  Language distribution
                 </Typography>
+                <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75 }}>
+                  {Object.entries(structure.languageBreakdown)
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([language, count]) => (
+                      <Chip key={language} size="small" label={`${language} · ${count}`} sx={{ fontWeight: 700 }} />
+                    ))}
+                </Stack>
               </Box>
-              <Box sx={{ overflowX: 'auto' }}>
-                <Table size="small">
+            )}
+
+            {structure && structure.dependencies.length > 0 && (
+              <Box sx={{ mb: 2.5 }}>
+                <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                  Declared dependencies ({structure.dependencies.length})
+                </Typography>
+                <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, maxHeight: 120, overflowY: 'auto' }}>
+                  {structure.dependencies.slice(0, 40).map((dependency) => (
+                    <Chip
+                      key={dependency}
+                      size="small"
+                      variant="outlined"
+                      label={dependency}
+                      sx={{ fontFamily: 'var(--font-mono)', fontSize: '0.68rem' }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
+            )}
+
+            {project.discoveryNotes && (
+              <Alert severity="info" variant="outlined" icon={<Info size={18} />} sx={{ borderRadius: 2.5 }}>
+                <Typography variant="caption" sx={{ fontWeight: 750, display: 'block', mb: 0.5 }}>
+                  What discovery found
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {project.discoveryNotes}
+                </Typography>
+              </Alert>
+            )}
+          </Card>
+
+          <Card sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5 }}>
+              <Code2 size={18} color={brand.secondary} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                Discovered routes
+              </Typography>
+              <Chip size="small" variant="outlined" label={structure?.endpoints.length ?? 0} />
+            </Stack>
+
+            {!structure || structure.endpoints.length === 0 ? (
+              <EmptyState
+                dense
+                icon={<Code2 size={22} />}
+                title="No routes discovered"
+                description="QPilot found no HTTP routes. The project may not expose any, or it may use a framework whose routing syntax is not among the supported patterns (Spring MVC, Express, Flask/FastAPI). Attaching an OpenAPI document gives QPilot an authoritative route list."
+              />
+            ) : (
+              <Box className="qp-scroll-x" sx={{ maxHeight: 400, overflowY: 'auto' }}>
+                <Table size="small" stickyHeader>
                   <TableHead>
                     <TableRow>
                       <TableCell>Method</TableCell>
-                      <TableCell>Route Path</TableCell>
-                      <TableCell>Controller / Source File</TableCell>
+                      <TableCell>Path</TableCell>
+                      <TableCell>Declared in</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {structure.endpoints.map((ep, idx) => (
-                      <TableRow key={idx} hover>
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            label={ep.httpMethod}
-                            color={
-                              ep.httpMethod === 'GET'
-                                ? 'success'
-                                : ep.httpMethod === 'POST'
-                                ? 'primary'
-                                : ep.httpMethod === 'DELETE'
-                                ? 'error'
-                                : 'warning'
-                            }
-                            sx={{ fontWeight: 800, fontSize: '0.68rem', height: 20 }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" sx={{ fontFamily: 'JetBrains Mono', fontWeight: 600, color: 'primary.main' }}>
-                            {ep.path}
-                          </Typography>
-                        </TableCell>
-                        <TableCell sx={{ maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'JetBrains Mono' }}>
-                            {ep.sourceFile}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {structure.endpoints.map((endpoint, index) => {
+                      const color = METHOD_COLORS[endpoint.httpMethod] ?? brand.secondary;
+                      return (
+                        <TableRow key={`${endpoint.httpMethod}-${endpoint.path}-${index}`} hover>
+                          <TableCell sx={{ width: 92 }}>
+                            <Chip
+                              size="small"
+                              label={endpoint.httpMethod}
+                              sx={{ fontWeight: 800, fontSize: '0.66rem', color, bgcolor: `${color}1F`, border: `1px solid ${color}3D` }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="caption" sx={{ fontFamily: 'var(--font-mono)', fontWeight: 650, overflowWrap: 'anywhere' }}>
+                              {endpoint.path}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={{ maxWidth: 240 }}>
+                            <Typography variant="caption" color="text.secondary" className="qp-truncate" sx={{ fontFamily: 'var(--font-mono)', display: 'block' }}>
+                              {endpoint.sourceFile}
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </Box>
-            </Box>
-          )}
-        </Card>
+            )}
+          </Card>
+        </Stack>
       </Grid>
 
-      {/* Right Column: AI Code Understanding & Agent Insights */}
-      <Grid size={{ xs: 12, md: 5 }}>
-        <Card sx={{ p: 2.5, mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Cpu size={20} color="#8B5CF6" />
-              <Typography variant="h6" sx={{ fontWeight: 800 }}>
-                AI Code Understanding Agent
-              </Typography>
-            </Box>
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<Play size={14} />}
-              onClick={onAnalyze}
-              disabled={isAnalyzing}
-              sx={{ fontWeight: 700 }}
-            >
-              {isAnalyzing ? 'Analyzing…' : analysis ? 'Re-Run AI' : 'Run Audit'}
-            </Button>
-          </Box>
-
-          {!analysis ? (
-            <Box sx={{ py: 5, textAlign: 'center' }}>
-              <Sparkles size={42} color="#10B981" style={{ marginBottom: 12, opacity: 0.8 }} />
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
-                Ready to Reason Over Repository
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320, mx: 'auto', mb: 2 }}>
-                Click &quot;Run Audit&quot; to invoke Gemini 3.6 multi-agent reasoning for code summarization, unit test generation, security scanning & risk scoring.
-              </Typography>
-              <Button variant="contained" color="primary" onClick={onAnalyze} disabled={isAnalyzing} startIcon={<Zap size={16} />}>
-                Start Autonomous Audit
+      {/* ── Analysis output ───────────────────────────────────────────── */}
+      <Grid size={{ xs: 12, lg: 5 }}>
+        <Stack spacing={2.5}>
+          <Card sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <FileSearch size={18} color={brand.secondary} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                  Static analysis
+                </Typography>
+              </Stack>
+              <Button
+                variant={analysis ? 'outlined' : 'contained'}
+                size="small"
+                startIcon={isAnalyzing ? <CircularProgress size={14} color="inherit" /> : <Play size={14} />}
+                onClick={onAnalyze}
+                disabled={isAnalyzing}
+                sx={{ fontWeight: 750 }}
+              >
+                {isAnalyzing ? 'Analyzing…' : analysis ? 'Re-run' : 'Run analysis'}
               </Button>
-            </Box>
-          ) : (
-            <Box>
-              <Paper sx={{ p: 2, borderRadius: 2.5, bgcolor: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', mb: 2 }}>
-                <Typography variant="caption" color="primary.main" sx={{ fontWeight: 800, letterSpacing: '0.04em', display: 'block', mb: 0.5 }}>
-                  ARCHITECTURAL SUMMARY
-                </Typography>
-                <Typography variant="body2" sx={{ lineHeight: 1.6, fontWeight: 500 }}>
-                  {analysis.run.codeSummary}
-                </Typography>
-              </Paper>
+            </Stack>
 
-              {analysis.run.keyResponsibilities.length > 0 && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 1 }}>
-                    KEY SYSTEM RESPONSIBILITIES
-                  </Typography>
-                  <List dense disablePadding>
-                    {analysis.run.keyResponsibilities.map((item, idx) => (
-                      <ListItem key={idx} disableGutters sx={{ py: 0.5 }}>
-                        <ListItemIcon sx={{ minWidth: 26 }}>
-                          <CheckCircle2 size={16} color="#10B981" />
-                        </ListItemIcon>
-                        <ListItemText primary={<Typography variant="body2" sx={{ fontWeight: 600 }}>{item}</Typography>} />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
-              )}
-
-              {analysis.run.notableObservations.length > 0 && (
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 1 }}>
-                    NOTABLE OBSERVATIONS & RISKS
-                  </Typography>
-                  <List dense disablePadding>
-                    {analysis.run.notableObservations.map((item, idx) => (
-                      <ListItem key={idx} disableGutters sx={{ py: 0.5 }}>
-                        <ListItemIcon sx={{ minWidth: 26 }}>
-                          <AlertCircle size={16} color="#F59E0B" />
-                        </ListItemIcon>
-                        <ListItemText primary={<Typography variant="body2" color="text.secondary">{item}</Typography>} />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
-              )}
-
-              <Box sx={{ pt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="caption" color="text.secondary">
-                  Engine: <strong style={{ color: '#10B981' }}>{analysis.run.aiProvider}</strong>
+            {isAnalyzing && run && (
+              <Box sx={{ mb: 2 }}>
+                <LinearProgress variant="determinate" value={run.progressPercent} />
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                  {run.progressPercent}% — {run.currentStage}
                 </Typography>
-                <Chip icon={<FileCode2 size={12} />} label={`${analysis.tests.length} Tests Generated`} size="small" color="primary" variant="outlined" sx={{ height: 20, fontSize: '0.65rem' }} />
               </Box>
-            </Box>
-          )}
-        </Card>
+            )}
+
+            {!analysis ? (
+              <EmptyState
+                dense
+                icon={<Sparkles size={22} />}
+                title="Not analyzed yet"
+                description="QPilot will scan your real files, match security rules with file/line evidence, count the test surface and compute a risk score from those counts."
+              />
+            ) : (
+              <Stack spacing={2}>
+                {run?.staticSummary && (
+                  <Paper sx={{ p: 1.75, borderRadius: 2.5, bgcolor: 'rgba(0, 194, 204, 0.07)', border: '1px solid rgba(0, 194, 204, 0.28)' }}>
+                    <Typography variant="overline" sx={{ color: brand.secondary, display: 'block', mb: 0.5 }}>
+                      MEASURED SUMMARY
+                    </Typography>
+                    <Typography variant="body2">{run.staticSummary}</Typography>
+                  </Paper>
+                )}
+
+                {run && run.observations.length > 0 && (
+                  <Box>
+                    <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                      Observations
+                    </Typography>
+                    <Stack spacing={0.75}>
+                      {run.observations.map((observation, index) => (
+                        <Stack key={index} direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+                          <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: 'secondary.main', mt: '7px', flexShrink: 0 }} />
+                          <Typography variant="caption" color="text.secondary">
+                            {observation}
+                          </Typography>
+                        </Stack>
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
+
+                {run?.errorMessage && (
+                  <Alert severity="error" variant="outlined" sx={{ borderRadius: 2.5 }}>
+                    <Typography variant="caption">{run.errorMessage}</Typography>
+                  </Alert>
+                )}
+              </Stack>
+            )}
+          </Card>
+
+          {/* AI panel — always present, always explicit about whether it ran. */}
+          <Card sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5 }}>
+              <Bot size={18} color={statusColors.warning} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                AI narrative
+              </Typography>
+              {run?.aiEnabled ? (
+                <Chip size="small" variant="outlined" color="warning" label="Advisory" sx={{ fontWeight: 700 }} />
+              ) : (
+                <Chip size="small" variant="outlined" label="Not applied" sx={{ fontWeight: 700 }} />
+              )}
+            </Stack>
+
+            {!run ? (
+              <Typography variant="body2" color="text.secondary">
+                Run an analysis first.
+              </Typography>
+            ) : run.aiEnabled && run.aiSummary ? (
+              <Stack spacing={1.75}>
+                <Typography variant="body2">{run.aiSummary}</Typography>
+                {run.aiKeyResponsibilities.length > 0 && (
+                  <Box>
+                    <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                      Key responsibilities (AI)
+                    </Typography>
+                    <Stack spacing={0.5}>
+                      {run.aiKeyResponsibilities.map((item, index) => (
+                        <Typography key={index} variant="caption" color="text.secondary">
+                          • {item}
+                        </Typography>
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
+                <Alert severity="warning" variant="outlined" sx={{ borderRadius: 2.5 }}>
+                  <Typography variant="caption">
+                    Produced by {run.aiProvider}. This is an interpretation, not a measurement — the numbers elsewhere
+                    on this page were computed independently of it.
+                  </Typography>
+                </Alert>
+              </Stack>
+            ) : (
+              <Alert severity="info" variant="outlined" icon={<Info size={18} />} sx={{ borderRadius: 2.5 }}>
+                <Typography variant="caption" sx={{ fontWeight: 750, display: 'block', mb: 0.5 }}>
+                  No AI narrative for this run
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {run.aiStatus ?? 'AI enrichment did not run.'}
+                </Typography>
+              </Alert>
+            )}
+          </Card>
+        </Stack>
       </Grid>
     </Grid>
   );

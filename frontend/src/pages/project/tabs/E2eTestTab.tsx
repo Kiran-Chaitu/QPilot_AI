@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { runE2eTest, type E2eTestResponse } from '../../../api/e2eTestApi';
 import { useToast } from '../../../context/ToastContext';
+import { NotAvailable } from '../../../components/common/StateViews';
 
 function getCategoryColor(category: string) {
   switch (category) {
@@ -85,7 +86,7 @@ export function E2eTestTab({ defaultUrl }: { defaultUrl?: string }) {
         showLoginFields ? password : undefined
       );
       setResult(data);
-      showSuccess(`E2E smoke test completed — ${data.passedChecks}/${data.totalChecks} checks passed!`);
+      showSuccess(`Smoke checks completed — ${data.passedChecks}/${data.totalChecks} passed.`);
     } catch {
       showError('E2E test failed. Please check the target URL and try again.');
     } finally {
@@ -116,7 +117,11 @@ export function E2eTestTab({ defaultUrl }: { defaultUrl?: string }) {
     URL.revokeObjectURL(url);
   };
 
-  const passRate = result ? Math.round((result.passedChecks / result.totalChecks) * 100) : 0;
+  // Guarded against a zero denominator: with no checks executed this produced NaN, which rendered
+  // literally as "NaN%" in the summary.
+  const passRate = result && result.totalChecks > 0
+    ? Math.round((result.passedChecks / result.totalChecks) * 100)
+    : null;
 
   return (
     <Stack spacing={3}>
@@ -132,14 +137,15 @@ export function E2eTestTab({ defaultUrl }: { defaultUrl?: string }) {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
           <MonitorCheck size={24} color="#6366F1" />
           <Typography variant="h6" sx={{ fontWeight: 800 }}>
-            E2E Browser Smoke Test Engine
+            HTTP smoke checks
           </Typography>
-          <Chip label="HTTP-Based Checks" color="primary" size="small" variant="outlined" />
+          <Chip label="No browser involved" color="primary" size="small" variant="outlined" />
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Run automated end-to-end smoke tests against any URL. Tests include page accessibility, login flow simulation,
-          authenticated page access, internal link health, API endpoint checks, and security header validation.
-          Generates a downloadable Playwright test script for your CI/CD pipeline.
+          Sends real HTTP requests to check page reachability, a form-post login attempt, authenticated access,
+          internal link health, and security headers. These are transport-level checks — nothing is rendered, so
+          JavaScript-driven behaviour, layout and client-side routing are not covered. The Playwright script below is
+          generated for you to run in a real browser, where those things can be tested.
         </Typography>
 
         <Grid container spacing={2}>
@@ -248,9 +254,18 @@ export function E2eTestTab({ defaultUrl }: { defaultUrl?: string }) {
                   background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.6) 0%, rgba(9, 13, 22, 0.8) 100%)',
                 }}
               >
-                <Typography variant="h3" sx={{ fontWeight: 800, color: passRate >= 70 ? '#10B981' : passRate >= 40 ? '#F59E0B' : '#EF4444' }}>
-                  {passRate}%
-                </Typography>
+                {passRate === null ? (
+                  <Box sx={{ py: 1.5 }}>
+                    <NotAvailable reason="No checks were executed, so there is no pass rate to report. Showing 0% would imply every check failed." />
+                  </Box>
+                ) : (
+                  <Typography
+                    variant="h3"
+                    sx={{ fontWeight: 800, color: passRate >= 70 ? '#12B981' : passRate >= 40 ? '#F1A22B' : '#F04452' }}
+                  >
+                    {passRate}%
+                  </Typography>
+                )}
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>Pass Rate</Typography>
               </Paper>
             </Grid>

@@ -61,6 +61,14 @@ public class Project {
     @Column(length = 2000)
     private String processingError;
 
+    /**
+     * What discovery established — and, importantly, what it could not — for URL-based projects.
+     * Surfaced in the UI so an empty structure reads as "these locations were probed and returned
+     * nothing" rather than as an unexplained blank.
+     */
+    @Column(length = 2000)
+    private String discoveryNotes;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -121,6 +129,9 @@ public class Project {
 
     public String getProcessingError() { return processingError; }
     public void setProcessingError(String processingError) { this.processingError = processingError; }
+
+    public String getDiscoveryNotes() { return discoveryNotes; }
+    public void setDiscoveryNotes(String discoveryNotes) { this.discoveryNotes = discoveryNotes; }
 
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }

@@ -33,7 +33,11 @@ export async function getProjectDetail(projectId: number): Promise<ProjectDetail
 }
 
 export interface CreateProjectPayload {
-  name: string;
+  /**
+   * Optional. When omitted the server derives the name from what discovery actually finds — the
+   * OpenAPI document title, the page title, or the hostname — which is more useful than a placeholder.
+   */
+  name?: string;
   description?: string;
   sourceType: 'ZIP' | 'GIT_URL' | 'OPENAPI' | 'POSTMAN' | 'WEBSITE_URL' | 'API_URL';
   repoUrl?: string;

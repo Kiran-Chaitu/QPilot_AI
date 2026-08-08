@@ -1,282 +1,114 @@
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import {
-  Alert,
-  Box,
-  Button,
-  Card,
-  Chip,
-  IconButton,
-  InputAdornment,
-  Link,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material';
-import {
-  Bot,
-  Eye,
-  EyeOff,
-  Mail,
-  Lock,
-  ArrowRight,
-  ShieldCheck,
-  Zap,
-  CheckCircle2,
-} from 'lucide-react';
+import { Link as RouterLink, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Alert, Box, Button, CircularProgress, Divider, Stack, TextField, Typography } from '@mui/material';
+import { LogIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
 import { extractErrorMessage } from '../../api/httpClient';
-import type { LoginRequest } from '../../types/auth';
+import { AuthShell } from './AuthShell';
 
 export function LoginPage() {
-  const { login } = useAuth();
-  const { showSuccess } = useToast();
   const navigate = useNavigate();
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const { login, isAuthenticated } = useAuth();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    formState: { errors },
-  } = useForm<LoginRequest>();
+  // The interceptor appends ?expired=1 when it clears a rejected token, so the user is told why they
+  // were returned here instead of being silently bounced to the login form.
+  const sessionExpired = searchParams.get('expired') === '1';
 
-  async function onSubmit(values: LoginRequest) {
-    setServerError(null);
+  // Declarative redirect rather than calling navigate() during render. Navigating mid-render mutates
+  // router state while React is rendering, which React flags and which can loop.
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
     setIsSubmitting(true);
     try {
-      await login(values);
-      showSuccess('Welcome back to QPilot AI!');
+      await login({ email: email.trim(), password });
       navigate('/dashboard', { replace: true });
-    } catch (error) {
-      setServerError(extractErrorMessage(error, 'Invalid email or password.'));
+    } catch (err) {
+      setError(extractErrorMessage(err, 'Could not sign in. Check your email and password.'));
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  const handleFillDemo = (email: string) => {
-    setValue('email', email, { shouldValidate: true });
-    setValue('password', 'password123', { shouldValidate: true });
-    onSubmit({ email, password: 'password123' });
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.18) 0%, transparent 45%), radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.18) 0%, transparent 45%), #090D16',
-        p: 2,
-      }}
-    >
-      <Card
-        elevation={0}
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', md: 'row' },
-          width: '100%',
-          maxWidth: 960,
-          borderRadius: 4,
-          overflow: 'hidden',
-          border: '1px solid',
-          borderColor: 'rgba(255, 255, 255, 0.12)',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(16px)',
-        }}
-      >
-        {/* Left Feature Hero Side */}
-        <Box
-          sx={{
-            flex: 1,
-            p: { xs: 4, md: 5 },
-            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(139, 92, 246, 0.15) 100%)',
-            borderRight: { md: '1px solid' },
-            borderColor: 'rgba(255, 255, 255, 0.08)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-          }}
-        >
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 4 }}>
-              <Box
-                sx={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 6px 20px rgba(99, 102, 241, 0.5)',
-                }}
-              >
-                <Bot size={26} color="#FFF" />
-              </Box>
-              <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: '-0.02em', background: 'linear-gradient(135deg, #FFFFFF 0%, #A5B4FC 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                QPilot AI
-              </Typography>
-            </Box>
-
-            <Typography variant="h4" sx={{ fontWeight: 800, mb: 2, lineHeight: 1.25 }}>
-              Autonomous AI Quality Engineering Platform
-            </Typography>
-
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 4, lineHeight: 1.6 }}>
-              Supercharge your test lifecycle. Generate multi-framework unit tests, synthetic web audits, API collections & safe load simulations in seconds.
-            </Typography>
-
-            <Stack spacing={2} sx={{ mb: 4 }}>
-              {[
-                'Multi-Agent Architecture & Codebase RAG Discovery',
-                'JUnit, RestAssured, Playwright & Cypress Test Generation',
-                'Synthetic Website Auditor (Broken Links, SEO, WCAG)',
-                'Safe Load & Performance Stress Test Engine',
-              ].map((feat) => (
-                <Box key={feat} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <CheckCircle2 size={18} color="#10B981" />
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {feat}
-                  </Typography>
-                </Box>
-              ))}
-            </Stack>
-          </Box>
-
-          <Box sx={{ pt: 2.5, borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, fontWeight: 700, letterSpacing: '0.05em' }}>
-              1-CLICK DEMO ACCOUNTS
-            </Typography>
-            <Stack direction="row" spacing={1.5}>
-              <Chip
-                icon={<Zap size={14} color="#6366F1" />}
-                label="Dev Account"
-                clickable
-                onClick={() => handleFillDemo('dev@testforge.com')}
-                color="primary"
-                variant="outlined"
-                size="medium"
-                sx={{ fontWeight: 700, borderRadius: 2, py: 1.8 }}
-              />
-              <Chip
-                icon={<ShieldCheck size={14} color="#10B981" />}
-                label="QA Lead Account"
-                clickable
-                onClick={() => handleFillDemo('qa@testforge.com')}
-                color="secondary"
-                variant="outlined"
-                size="medium"
-                sx={{ fontWeight: 700, borderRadius: 2, py: 1.8 }}
-              />
-            </Stack>
-          </Box>
-        </Box>
-
-        {/* Right Form Side */}
-        <Box sx={{ flex: 1, p: { xs: 4, md: 5 }, bgcolor: 'background.paper', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <Typography variant="h5" sx={{ fontWeight: 800, mb: 0.5 }}>
-            Sign In to QPilot
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Enter your credentials to access your testing workspace.
-          </Typography>
-
-          {serverError && (
-            <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
-              {serverError}
+    <AuthShell title="Sign in" subtitle="Access your projects, analyses and test results.">
+      <Box component="form" onSubmit={handleSubmit} noValidate>
+        <Stack spacing={2}>
+          {sessionExpired && (
+            <Alert severity="info" variant="outlined" sx={{ borderRadius: 2.5 }}>
+              <Typography variant="caption">Your session expired, so you were signed out. Sign in again to continue.</Typography>
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit(onSubmit)} noValidate>
-            <Stack spacing={2.5}>
-              <TextField
-                label="Email address"
-                type="email"
-                fullWidth
-                autoComplete="email"
-                error={!!errors.email}
-                helperText={errors.email?.message}
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Mail size={18} style={{ opacity: 0.7 }} />
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-                {...register('email', { required: 'Email address is required' })}
-              />
+          {error && (
+            <Alert severity="error" variant="outlined" sx={{ borderRadius: 2.5 }}>
+              <Typography variant="body2">{error}</Typography>
+            </Alert>
+          )}
 
-              <TextField
-                label="Password"
-                type={showPassword ? 'text' : 'password'}
-                fullWidth
-                autoComplete="current-password"
-                error={!!errors.password}
-                helperText={errors.password?.message}
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <Lock size={18} style={{ opacity: 0.7 }} />
-                      </InputAdornment>
-                    ),
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton
-                          type="button"
-                          onClick={() => setShowPassword((prev) => !prev)}
-                          edge="end"
-                          aria-label={showPassword ? 'Hide password' : 'Show password'}
-                          tabIndex={-1}
-                        >
-                          {showPassword ? <EyeOff size={18} color="#6366F1" /> : <Eye size={18} />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-                {...register('password', { required: 'Password is required' })}
-              />
+          <TextField
+            label="Email"
+            type="email"
+            fullWidth
+            required
+            autoComplete="email"
+            autoFocus
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            disabled={isSubmitting}
+          />
+          <TextField
+            label="Password"
+            type="password"
+            fullWidth
+            required
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            disabled={isSubmitting}
+          />
 
-              <Button
-                type="submit"
-                variant="contained"
-                size="large"
-                disabled={isSubmitting}
-                endIcon={<ArrowRight size={18} />}
-                sx={{
-                  py: 1.4,
-                  fontWeight: 800,
-                  borderRadius: 2.5,
-                  background: 'linear-gradient(135deg, #6366F1 0%, #4F46E5 100%)',
-                  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
-                  '&:hover': {
-                    background: 'linear-gradient(135deg, #4F46E5 0%, #4338CA 100%)',
-                  },
-                }}
-              >
-                {isSubmitting ? 'Authenticating…' : 'Sign In to Workspace'}
-              </Button>
-            </Stack>
-          </Box>
+          <Button
+            type="submit"
+            variant="contained"
+            size="large"
+            fullWidth
+            startIcon={isSubmitting ? <CircularProgress size={16} color="inherit" /> : <LogIn size={17} />}
+            disabled={isSubmitting || !email.trim() || !password}
+            sx={{ fontWeight: 780, py: 1.15 }}
+          >
+            {isSubmitting ? 'Signing in…' : 'Sign in'}
+          </Button>
 
-          <Typography variant="body2" align="center" sx={{ mt: 4, color: 'text.secondary' }}>
-            Don&apos;t have an account?{' '}
-            <Link component={RouterLink} to="/register" sx={{ fontWeight: 700, color: 'primary.main', textDecoration: 'none' }}>
-              Create Account
-            </Link>
+          <Divider sx={{ my: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              new here?
+            </Typography>
+          </Divider>
+
+          <Button component={RouterLink} to="/register" variant="outlined" fullWidth sx={{ fontWeight: 700 }}>
+            Create an account
+          </Button>
+
+          <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+            Trouble signing in? Confirm the API is reachable at the address configured in{' '}
+            <Box component="code" sx={{ fontSize: '0.72rem' }}>
+              VITE_API_BASE_URL
+            </Box>
+            .
           </Typography>
-        </Box>
-      </Card>
-    </Box>
+        </Stack>
+      </Box>
+    </AuthShell>
   );
 }

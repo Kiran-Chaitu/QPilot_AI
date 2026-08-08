@@ -5,6 +5,7 @@ import com.testforge.backend.auth.entity.User;
 import com.testforge.backend.common.exception.BadRequestException;
 import com.testforge.backend.common.exception.ResourceNotFoundException;
 import com.testforge.backend.common.storage.FileStorageService;
+import com.testforge.backend.project.dto.CreateProjectRequest;
 import com.testforge.backend.project.dto.ProjectDetailResponse;
 import com.testforge.backend.project.dto.ProjectResponse;
 import com.testforge.backend.project.dto.ProjectStructureSummary;
@@ -32,13 +33,16 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final FileStorageService fileStorageService;
     private final ProjectMetadataAnalyzer metadataAnalyzer;
+    private final UrlProjectDiscoveryService urlProjectDiscoveryService;
     private final ObjectMapper objectMapper;
 
     public ProjectService(ProjectRepository projectRepository, FileStorageService fileStorageService,
-                           ProjectMetadataAnalyzer metadataAnalyzer, ObjectMapper objectMapper) {
+                           ProjectMetadataAnalyzer metadataAnalyzer,
+                           UrlProjectDiscoveryService urlProjectDiscoveryService, ObjectMapper objectMapper) {
         this.projectRepository = projectRepository;
         this.fileStorageService = fileStorageService;
         this.metadataAnalyzer = metadataAnalyzer;
+        this.urlProjectDiscoveryService = urlProjectDiscoveryService;
         this.objectMapper = objectMapper;
     }
 
@@ -150,24 +154,37 @@ public class ProjectService {
         return toResponse(projectRepository.save(project));
     }
 
-    @Transactional
-    public ProjectResponse createProjectFromUrl(User owner, com.testforge.backend.project.dto.CreateProjectRequest req) {
+    /**
+     * Creates a project from a live URL, discovering its real structure by probing the target.
+     *
+     * <p>Every URL project used to be given the same hardcoded structure summary — one file, an invented
+     * dependency list, and two fictional endpoints ({@code GET /api/v1/health}, {@code POST /api/v1/data}).
+     * That fabrication then flowed into AI prompts and test generation, so users received tests for routes
+     * their service did not have. Discovery now asks the target what it exposes: an OpenAPI document if it
+     * publishes one, otherwise real page evidence, and an honestly empty structure if neither is available.
+     *
+     * <p>Discovery makes outbound network calls and is therefore not run inside the transaction; the
+     * project row is written once the result is known.
+     */
+    public ProjectResponse createProjectFromUrl(User owner, CreateProjectRequest req) {
         if (req.sourceType() == null) {
             throw new BadRequestException("Project source type is required");
         }
-        String projectName = req.name();
-        if (projectName == null || projectName.isBlank()) {
-            if (req.targetUrl() != null && !req.targetUrl().isBlank()) {
-                projectName = req.targetUrl().replace("https://", "").replace("http://", "").replace("/", "_");
-            } else if (req.repoUrl() != null && !req.repoUrl().isBlank()) {
-                String repo = req.repoUrl();
-                int lastSlash = repo.lastIndexOf('/');
-                projectName = lastSlash != -1 ? repo.substring(lastSlash + 1).replace(".git", "") : repo;
-            } else {
-                projectName = "New " + req.sourceType() + " Project";
-            }
+        if (isBlank(req.targetUrl()) && isBlank(req.targetApiUrl()) && isBlank(req.repoUrl())) {
+            throw new BadRequestException("A website URL, API base URL or repository URL is required to create a "
+                    + "URL-based project. To analyze source code instead, upload a ZIP archive.");
         }
 
+        UrlProjectDiscoveryService.DiscoveryResult discovery =
+                urlProjectDiscoveryService.discover(req.targetUrl(), req.targetApiUrl());
+
+        String projectName = resolveProjectName(req, discovery);
+        return persistUrlProject(owner, req, projectName, discovery);
+    }
+
+    @Transactional
+    protected ProjectResponse persistUrlProject(User owner, CreateProjectRequest req, String projectName,
+                                                UrlProjectDiscoveryService.DiscoveryResult discovery) {
         Project project = new Project();
         project.setOwner(owner);
         project.setName(projectName);
@@ -177,27 +194,71 @@ public class ProjectService {
         project.setTargetUrl(req.targetUrl());
         project.setTargetApiUrl(req.targetApiUrl());
         project.setStatus(ProjectStatus.UPLOADED);
-        project.setPrimaryLanguage(req.sourceType() == ProjectSourceType.WEBSITE_URL ? "HTML/CSS/JS" : "REST API");
-        project.setFileCount(1);
+        project.setPrimaryLanguage(discovery.primaryLanguageLabel());
+        // Genuinely zero: nothing was downloaded, so there are no files to count. A placeholder here
+        // would show up on the dashboard as a real measurement.
+        project.setFileCount(0);
+        project.setDiscoveryNotes(truncate(String.join(" ", discovery.notes())));
 
-        ProjectStructureSummary defaultSummary = new ProjectStructureSummary(
-                1,
-                java.util.Map.of("REST/HTML", 1L),
-                project.getPrimaryLanguage(),
-                java.util.List.of("Spring Boot", "Jackson", "JUnit 5"),
-                java.util.List.of(
-                        new com.testforge.backend.project.dto.ApiEndpointSummary("GET", "/api/v1/health", "HealthController.java", "checkHealth"),
-                        new com.testforge.backend.project.dto.ApiEndpointSummary("POST", "/api/v1/data", "DataController.java", "processData")
-                ),
-                java.util.List.of("src/", "pom.xml"),
-                java.util.List.of()
-        );
+        if (!discovery.reachable()) {
+            project.setProcessingError("The target URL could not be reached during discovery, so no structure "
+                    + "was detected. The project was created so you can correct the URL and re-run discovery.");
+        }
 
         try {
-            project.setStructureSummaryJson(objectMapper.writeValueAsString(defaultSummary));
-        } catch (IOException ignored) {}
+            project.setStructureSummaryJson(objectMapper.writeValueAsString(discovery.structure()));
+        } catch (IOException e) {
+            log.warn("Could not serialize discovered structure for URL project: {}", e.getMessage());
+        }
 
-        return toResponse(projectRepository.save(project));
+        Project saved = projectRepository.save(project);
+        log.info("Created URL project {} ({}): {} endpoint(s) discovered", saved.getId(), projectName,
+                discovery.structure().endpoints().size());
+        return toResponse(saved);
+    }
+
+    private String resolveProjectName(CreateProjectRequest req, UrlProjectDiscoveryService.DiscoveryResult discovery) {
+        if (!isBlank(req.name())) {
+            return req.name().trim();
+        }
+        // Prefer names taken from the target itself over a synthesized one, so the project is
+        // recognizable in the workspace list.
+        if (discovery.swagger() != null && !isBlank(discovery.swagger().title())) {
+            return discovery.swagger().title();
+        }
+        if (!isBlank(discovery.detectedTitle())) {
+            return discovery.detectedTitle();
+        }
+        String url = firstNonBlank(req.targetUrl(), req.targetApiUrl());
+        if (url != null) {
+            try {
+                String host = java.net.URI.create(url.startsWith("http") ? url : "https://" + url).getHost();
+                if (host != null && !host.isBlank()) {
+                    return host;
+                }
+            } catch (Exception ignored) {
+                // Fall through to the repository-derived or generic name below.
+            }
+        }
+        if (!isBlank(req.repoUrl())) {
+            String repo = req.repoUrl();
+            int lastSlash = repo.lastIndexOf('/');
+            return lastSlash != -1 ? repo.substring(lastSlash + 1).replace(".git", "") : repo;
+        }
+        return "New " + req.sourceType() + " project";
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (!isBlank(value)) {
+                return value;
+            }
+        }
+        return null;
     }
 
     @Transactional(readOnly = true)
@@ -211,6 +272,18 @@ public class ProjectService {
         Project project = getOwnedProject(owner, projectId);
         ProjectStructureSummary summary = readStructureSummary(project);
         return new ProjectDetailResponse(toResponse(project), summary);
+    }
+
+    /**
+     * Loads a project without an ownership check, for background jobs that have already authorized the
+     * caller. Background threads have no request-scoped persistence context, so a lazily-associated
+     * project reached through another entity would throw LazyInitializationException — this gives such
+     * jobs a fully-initialized instance instead.
+     */
+    @Transactional(readOnly = true)
+    public Project getByIdForBackgroundJob(Long projectId) {
+        return projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
     }
 
     @Transactional(readOnly = true)
@@ -277,6 +350,6 @@ public class ProjectService {
                 p.getId(), p.getName(), p.getDescription(), p.getSourceType(), p.getRepoUrl(),
                 p.getTargetUrl(), p.getTargetApiUrl(),
                 p.getPrimaryLanguage(), p.getFileCount(), p.getStatus(), p.getSwaggerFilePath() != null,
-                p.getProcessingError(), p.getCreatedAt(), p.getUpdatedAt());
+                p.getProcessingError(), p.getDiscoveryNotes(), p.getCreatedAt(), p.getUpdatedAt());
     }
 }

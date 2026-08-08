@@ -18,6 +18,7 @@ import {
 import { Sparkles, Key, CheckCircle, RefreshCw, X, ShieldAlert, Cpu } from 'lucide-react';
 import { getAiConfig, updateAiConfig, type AiConfig } from '../../api/aiApi';
 import { useToast } from '../../context/ToastContext';
+import { extractErrorMessage } from '../../api/httpClient';
 
 interface AiSettingsModalProps {
   open: boolean;
@@ -32,6 +33,7 @@ export function AiSettingsModal({ open, onClose, onConfigChanged }: AiSettingsMo
   const [model, setModel] = useState('gemini-2.0-flash');
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -41,12 +43,15 @@ export function AiSettingsModal({ open, onClose, onConfigChanged }: AiSettingsMo
 
   async function loadConfig() {
     setIsLoading(true);
+    setError(null);
     try {
       const data = await getAiConfig();
       setConfig(data);
       if (data.model) setModel(data.model);
-    } catch {
-      // silently ignore on load failure — user may not be authenticated yet
+    } catch (err) {
+      // Surfaced rather than swallowed: silently showing an empty dialog left the user unable to tell
+      // a permissions problem from an unreachable backend.
+      setError(extractErrorMessage(err, 'Could not read the current AI configuration.'));
     } finally {
       setIsLoading(false);
     }
@@ -54,16 +59,21 @@ export function AiSettingsModal({ open, onClose, onConfigChanged }: AiSettingsMo
 
   async function handleSave() {
     setIsSaving(true);
+    setError(null);
     try {
       const updated = await updateAiConfig(apiKey, model);
       setConfig(updated);
       setApiKey('');
-      showSuccess(updated.statusMessage || 'AI configuration updated successfully!');
+      showSuccess(updated.statusMessage || 'AI configuration updated.');
       if (onConfigChanged) onConfigChanged();
-      // Auto-close dialog after successful save
       onClose();
-    } catch {
-      showError('Failed to update Gemini API key configuration.');
+    } catch (err) {
+      // The server rejects this with 403 for non-administrators, since the key is process-wide state
+      // shared by every user. Reporting the real message tells them that, instead of implying the key
+      // itself was wrong.
+      const message = extractErrorMessage(err, 'Could not update the AI configuration.');
+      setError(message);
+      showError(message);
     } finally {
       setIsSaving(false);
     }
@@ -120,6 +130,12 @@ export function AiSettingsModal({ open, onClose, onConfigChanged }: AiSettingsMo
           </Box>
         ) : (
           <Stack spacing={3}>
+            {error && (
+              <Alert severity="error" variant="outlined" sx={{ borderRadius: 2.5 }}>
+                <Typography variant="body2">{error}</Typography>
+              </Alert>
+            )}
+
             {/* Status Banner */}
             <Box
               sx={{

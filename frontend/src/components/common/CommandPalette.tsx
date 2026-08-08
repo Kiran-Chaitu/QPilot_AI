@@ -1,28 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Box,
+  Chip,
   Dialog,
   DialogContent,
   InputBase,
-  Box,
-  Typography,
   List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Chip,
-  Divider,
+  Typography,
 } from '@mui/material';
-import {
-  Search,
-  LayoutDashboard,
-  Upload,
-  Globe,
-  Gauge,
-  ShieldCheck,
-  FileCode2,
-  Zap,
-} from 'lucide-react';
+import { CornerDownLeft, LayoutDashboard, Search, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { listProjects } from '../../api/projectApi';
+import type { ProjectResponse } from '../../types/project';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -30,97 +22,90 @@ interface CommandPaletteProps {
   onOpenUpload?: () => void;
 }
 
+interface Command {
+  id: string;
+  title: string;
+  subtitle: string;
+  category: string;
+  icon: React.ReactNode;
+  perform: () => void;
+}
+
+/**
+ * Command palette (⌘K / Ctrl+K).
+ *
+ * <p>The previous keyboard handler called `onClose()` in both branches of its open check, so the shortcut
+ * could only ever close the palette — pressing ⌘K on the dashboard did nothing at all. Opening is owned by
+ * the parent, so this component signals it through `onRequestOpen` instead of trying to toggle state it
+ * does not hold.
+ *
+ * <p>Commands include the user's real projects, fetched when the palette opens, so search actually
+ * navigates somewhere rather than listing a fixed set of tool links.
+ */
 export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose, onOpenUpload }) => {
   const [query, setQuery] = useState('');
+  const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const navigate = useNavigate();
 
+  // Loaded on open rather than on mount, so the list reflects projects added during the session.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        if (open) onClose();
-        else onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose]);
+    if (!open) {
+      return;
+    }
+    setQuery('');
+    listProjects()
+      .then(setProjects)
+      .catch(() => setProjects([]));
+  }, [open]);
 
-  const actions = [
-    {
-      id: 'dash',
-      title: 'Go to Dashboard',
-      subtitle: 'Overview of all projects, KPIs & coverage metrics',
-      icon: <LayoutDashboard size={20} color="#6366F1" />,
-      category: 'Navigation',
-      perform: () => {
-        navigate('/dashboard');
-        onClose();
+  const commands = useMemo<Command[]>(() => {
+    const base: Command[] = [
+      {
+        id: 'dashboard',
+        title: 'Go to dashboard',
+        subtitle: 'Workspace metrics and project list',
+        category: 'Navigation',
+        icon: <LayoutDashboard size={18} />,
+        perform: () => {
+          navigate('/dashboard');
+          onClose();
+        },
       },
-    },
-    {
-      id: 'upload',
-      title: 'Upload Project / Import Spec',
-      subtitle: 'ZIP, Git repository, OpenAPI/Swagger, Synthetic URL',
-      icon: <Upload size={20} color="#10B981" />,
-      category: 'Actions',
-      perform: () => {
-        onClose();
-        if (onOpenUpload) onOpenUpload();
+      {
+        id: 'upload',
+        title: 'Add a project',
+        subtitle: 'Upload a source archive or point QPilot at a live URL',
+        category: 'Actions',
+        icon: <Upload size={18} />,
+        perform: () => {
+          onClose();
+          onOpenUpload?.();
+        },
       },
-    },
-    {
-      id: 'website',
-      title: 'Synthetic Website Quality Auditor',
-      subtitle: 'Crawl site for broken links, accessibility, SEO & performance',
-      icon: <Globe size={20} color="#3B82F6" />,
-      category: 'Tools',
-      perform: () => {
-        navigate('/dashboard?tab=website');
-        onClose();
-      },
-    },
-    {
-      id: 'loadtest',
-      title: 'Safe Load & Performance Engine',
-      subtitle: 'Simulate concurrent user traffic, k6 & JMeter generators',
-      icon: <Gauge size={20} color="#F59E0B" />,
-      category: 'Tools',
-      perform: () => {
-        navigate('/dashboard?tab=loadtest');
-        onClose();
-      },
-    },
-    {
-      id: 'security',
-      title: 'Security & Vulnerability Audit',
-      subtitle: 'JWT, CORS, SQLi, XSS, CSRF & Secret Scanning',
-      icon: <ShieldCheck size={20} color="#EF4444" />,
-      category: 'Tools',
-      perform: () => {
-        navigate('/dashboard?tab=security');
-        onClose();
-      },
-    },
-    {
-      id: 'tests',
-      title: 'AI Multi-Framework Test Generator',
-      subtitle: 'JUnit, Mockito, RestAssured, Playwright, Cypress',
-      icon: <FileCode2 size={20} color="#8B5CF6" />,
-      category: 'Tools',
-      perform: () => {
-        navigate('/dashboard?tab=tests');
-        onClose();
-      },
-    },
-  ];
+    ];
 
-  const filtered = actions.filter(
-    (a) =>
-      a.title.toLowerCase().includes(query.toLowerCase()) ||
-      a.subtitle.toLowerCase().includes(query.toLowerCase()) ||
-      a.category.toLowerCase().includes(query.toLowerCase())
-  );
+    const projectCommands: Command[] = projects.map((project) => ({
+      id: `project-${project.id}`,
+      title: project.name,
+      subtitle: `${project.sourceType.replace('_', ' ')} · ${project.primaryLanguage ?? 'unknown language'} · ${project.status.toLowerCase()}`,
+      category: 'Projects',
+      icon: <Search size={18} />,
+      perform: () => {
+        navigate(`/projects/${project.id}`);
+        onClose();
+      },
+    }));
+
+    return [...base, ...projectCommands];
+  }, [projects, navigate, onClose, onOpenUpload]);
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return commands;
+    return commands.filter((command) =>
+      [command.title, command.subtitle, command.category].some((field) => field.toLowerCase().includes(needle)),
+    );
+  }, [commands, query]);
 
   return (
     <Dialog
@@ -128,93 +113,85 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose, o
       onClose={onClose}
       fullWidth
       maxWidth="sm"
-      slotProps={{
-        paper: {
-          sx: {
-            borderRadius: 3,
-            backgroundColor: 'background.paper',
-            backgroundImage: 'none',
-            border: '1px solid',
-            borderColor: 'divider',
-            boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
-            overflow: 'hidden',
-          },
-        },
-      }}
+      slotProps={{ paper: { sx: { overflow: 'hidden', mt: { xs: 2, sm: 8 }, alignSelf: 'flex-start' } } }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Search size={20} style={{ opacity: 0.6, marginRight: 12 }} />
+        <Search size={19} style={{ opacity: 0.6, marginRight: 12, flexShrink: 0 }} />
         <InputBase
           autoFocus
-          placeholder="Search commands, tools, or projects... (Esc to close)"
+          placeholder="Search projects and actions…"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          sx={{ flexGrow: 1, fontSize: '0.95rem', fontWeight: 500 }}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && filtered.length > 0) {
+              filtered[0].perform();
+            }
+          }}
+          sx={{ flexGrow: 1, fontSize: '0.95rem', fontWeight: 550 }}
         />
-        <Chip label="ESC" size="small" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />
+        <Chip label="ESC" size="small" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />
       </Box>
 
-      <DialogContent sx={{ p: 1, maxHeight: 400, overflowY: 'auto' }}>
+      <DialogContent sx={{ p: 1, maxHeight: 420, overflowY: 'auto' }}>
         {filtered.length === 0 ? (
           <Box sx={{ p: 3, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary">
-              No matching commands found for "{query}"
+              Nothing matches “{query}”.
             </Typography>
           </Box>
         ) : (
           <List disablePadding>
-            {filtered.map((item, index) => (
-              <React.Fragment key={item.id}>
-                {index === 0 || filtered[index - 1].category !== item.category ? (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ px: 2, pt: 1.5, pb: 0.5, display: 'block', fontWeight: 700, letterSpacing: '0.05em' }}
-                  >
-                    {item.category.toUpperCase()}
-                  </Typography>
-                ) : null}
-                <ListItemButton
-                  onClick={item.perform}
-                  sx={{
-                    borderRadius: 2,
-                    mx: 0.5,
-                    py: 1,
-                    '&:hover': {
-                      backgroundColor: 'action.hover',
-                    },
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: 38 }}>{item.icon}</ListItemIcon>
-                  <ListItemText
-                    primary={
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {item.title}
-                      </Typography>
-                    }
-                    secondary={
-                      <Typography variant="caption" color="text.secondary">
-                        {item.subtitle}
-                      </Typography>
-                    }
-                  />
-                  <Zap size={14} style={{ opacity: 0.4 }} />
-                </ListItemButton>
-              </React.Fragment>
-            ))}
+            {filtered.map((command, index) => {
+              const showHeader = index === 0 || filtered[index - 1].category !== command.category;
+              return (
+                <React.Fragment key={command.id}>
+                  {showHeader && (
+                    <Typography variant="overline" color="text.secondary" sx={{ px: 2, pt: 1.5, pb: 0.5, display: 'block' }}>
+                      {command.category}
+                    </Typography>
+                  )}
+                  <ListItemButton onClick={command.perform} sx={{ borderRadius: 2.5, mx: 0.5, py: 1 }}>
+                    <ListItemIcon sx={{ minWidth: 36 }}>{command.icon}</ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Typography variant="body2" sx={{ fontWeight: 650 }}>
+                          {command.title}
+                        </Typography>
+                      }
+                      secondary={
+                        <Typography variant="caption" color="text.secondary">
+                          {command.subtitle}
+                        </Typography>
+                      }
+                    />
+                    {index === 0 && <CornerDownLeft size={13} style={{ opacity: 0.4 }} />}
+                  </ListItemButton>
+                </React.Fragment>
+              );
+            })}
           </List>
         )}
       </DialogContent>
-
-      <Divider />
-      <Box sx={{ px: 2, py: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'action.hover' }}>
-        <Typography variant="caption" color="text.secondary">
-          Tip: Press <code style={{ fontSize: '0.75rem' }}>Ctrl + K</code> anywhere to trigger
-        </Typography>
-        <Typography variant="caption" color="primary" sx={{ fontWeight: 600 }}>
-          QPilot AI Engineer v2.0
-        </Typography>
-      </Box>
     </Dialog>
   );
 };
+
+/**
+ * Registers the global ⌘K / Ctrl+K shortcut.
+ *
+ * <p>Lives outside the palette component because the palette's open state belongs to the layout: a
+ * component cannot open itself if it only receives `open` and `onClose`, which is why the original
+ * shortcut could never work.
+ */
+export function useCommandPaletteShortcut(onToggle: () => void) {
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        onToggle();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onToggle]);
+}

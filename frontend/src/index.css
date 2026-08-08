@@ -1,8 +1,17 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
+/*
+ * Base stylesheet.
+ *
+ * Colour values here reference the custom properties published by the MUI theme
+ * (see theme/ThemeContext.tsx), so light/dark and any future palette change flow through
+ * automatically instead of needing a parallel set of hardcoded hex values kept in sync by hand.
+ * The fallbacks after each var() cover the first paint, before the theme has mounted.
+ */
+
 :root {
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', Consolas, monospace;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
 }
 
 * {
@@ -14,141 +23,284 @@ body,
 #root {
   margin: 0;
   padding: 0;
-  min-height: 100vh;
+  min-height: 100%;
   width: 100%;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Obsidian Ambient Background with Soft Micro Radials */
 body {
-  background-color: #09090B;
-  background-image: 
-    radial-gradient(at 10% 10%, rgba(16, 185, 129, 0.05) 0px, transparent 40%),
-    radial-gradient(at 90% 15%, rgba(139, 92, 246, 0.04) 0px, transparent 45%),
-    radial-gradient(at 50% 90%, rgba(59, 130, 246, 0.03) 0px, transparent 45%);
+  background-color: var(--qp-bg, #0b0c12);
+  color: var(--qp-text, #ecedf2);
+  /*
+   * Ambient depth. Kept to three very low-opacity radials: enough to stop a large dark page reading
+   * as flat, faint enough that text contrast is unaffected anywhere on it.
+   */
+  background-image:
+    radial-gradient(900px circle at 12% -5%, rgba(124, 92, 255, 0.10), transparent 45%),
+    radial-gradient(760px circle at 92% 8%, rgba(0, 194, 204, 0.07), transparent 48%),
+    radial-gradient(700px circle at 55% 105%, rgba(124, 92, 255, 0.05), transparent 46%);
   background-attachment: fixed;
-  color: #F4F4F5;
-  transition: background-color 0.25s ease, color 0.25s ease;
+  background-repeat: no-repeat;
+  transition: background-color 240ms ease, color 240ms ease;
 }
 
-.light-mode body {
-  background-color: #F8FAFC;
-  background-image: 
-    radial-gradient(at 10% 10%, rgba(5, 150, 105, 0.04) 0px, transparent 40%),
-    radial-gradient(at 90% 15%, rgba(124, 58, 237, 0.03) 0px, transparent 45%);
-  color: #0F172A;
+[data-theme='light'] body {
+  background-image:
+    radial-gradient(900px circle at 12% -5%, rgba(124, 92, 255, 0.08), transparent 45%),
+    radial-gradient(760px circle at 92% 8%, rgba(0, 194, 204, 0.06), transparent 48%);
 }
 
-/* Custom Sleek Scrollbar */
+/* ─── Scrollbars ────────────────────────────────────────────────────────────── */
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #09090B;
-}
-
-.light-mode ::-webkit-scrollbar-track {
-  background: #F1F5F9;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(16, 185, 129, 0.4);
-  border-radius: 4px;
-  transition: background 0.2s ease;
+  background: var(--qp-border-strong, rgba(255, 255, 255, 0.16));
+  border-radius: 999px;
+  /* Inset via a transparent border so the thumb reads as a slim pill rather than filling the gutter. */
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #10B981;
+  background: var(--qp-primary, #7c5cff);
+  background-clip: content-box;
 }
 
-/* Code & Syntax Highlight Styling */
-code, pre {
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--qp-border-strong, rgba(255, 255, 255, 0.16)) transparent;
+}
+
+/* ─── Code ──────────────────────────────────────────────────────────────────── */
+
+code,
+pre,
+kbd {
   font-family: var(--font-mono);
+  font-variant-ligatures: none;
 }
 
-code {
-  background: rgba(16, 185, 129, 0.1);
-  color: #34D399;
-  border-radius: 5px;
-  padding: 2px 6px;
-  font-size: 0.85em;
-  border: 1px solid rgba(16, 185, 129, 0.2);
-}
-
-.light-mode code {
-  background: rgba(5, 150, 105, 0.08);
-  color: #047857;
-  border: 1px solid rgba(5, 150, 105, 0.2);
+:not(pre) > code {
+  background: color-mix(in srgb, var(--qp-primary, #7c5cff) 12%, transparent);
+  color: var(--qp-text, #ecedf2);
+  border: 1px solid color-mix(in srgb, var(--qp-primary, #7c5cff) 22%, transparent);
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-size: 0.84em;
+  /* Long paths and evidence lines must be able to break rather than force the page to scroll. */
+  overflow-wrap: anywhere;
 }
 
 pre {
-  background: #121215 !important;
-  color: #F4F4F5 !important;
+  background: var(--qp-elevated, #1b1e2a);
+  color: var(--qp-text, #ecedf2);
   padding: 16px;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow-x: auto;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--qp-border, rgba(255, 255, 255, 0.09));
   margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  tab-size: 2;
 }
 
-/* Glassmorphism Card Effect */
-.glass-card {
-  background: rgba(18, 18, 21, 0.85) !important;
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+/* ─── Reusable surface treatments ───────────────────────────────────────────── */
+
+/*
+ * Glass is applied only where a surface genuinely sits above content: the app bar, dialogs, and hero
+ * panels. Applying it to every card would cost real GPU time on long pages and reduce text contrast
+ * for no benefit, so ordinary cards stay opaque.
+ */
+.qp-glass {
+  background: var(--qp-overlay, rgba(11, 12, 18, 0.72)) !important;
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid var(--qp-border, rgba(255, 255, 255, 0.09)) !important;
 }
 
-.light-mode .glass-card {
-  background: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+/* A gradient hairline border, used to mark the single most important panel on a page. */
+.qp-gradient-border {
+  position: relative;
+  border: 1px solid transparent !important;
+  background-clip: padding-box;
 }
 
-/* Smooth Interactive Glow Cards */
-.glow-on-hover {
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+.qp-gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--qp-primary, #7c5cff), var(--qp-secondary, #00c2cc) 55%, transparent);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
 }
 
-.glow-on-hover:hover {
+.qp-lift {
+  transition:
+    transform var(--qp-motion, 220ms) cubic-bezier(0.4, 0, 0.2, 1),
+    border-color var(--qp-motion, 220ms) ease,
+    box-shadow var(--qp-motion, 220ms) ease;
+}
+
+.qp-lift:hover {
   transform: translateY(-2px);
-  border-color: rgba(16, 185, 129, 0.5) !important;
-  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.15) !important;
+  border-color: color-mix(in srgb, var(--qp-primary, #7c5cff) 45%, transparent) !important;
+  box-shadow: 0 14px 34px -18px color-mix(in srgb, var(--qp-primary, #7c5cff) 65%, transparent);
 }
 
-/* Modern Gradient Text */
-.gradient-text {
-  background: linear-gradient(135deg, #10B981 0%, #34D399 50%, #8B5CF6 100%);
+.qp-gradient-text {
+  background: linear-gradient(120deg, var(--qp-primary, #7c5cff) 0%, var(--qp-secondary, #00c2cc) 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
-/* Status Indicator Dot */
-@keyframes pulse-ring {
+/* ─── Motion ────────────────────────────────────────────────────────────────── */
+
+@keyframes qp-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes qp-pulse-ring {
   0% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--qp-primary, #7c5cff) 65%, transparent);
   }
   70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+    box-shadow: 0 0 0 7px transparent;
   }
   100% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    box-shadow: 0 0 0 0 transparent;
   }
 }
 
-.status-live-dot {
+@keyframes qp-shimmer {
+  from {
+    background-position: -180% 0;
+  }
+  to {
+    background-position: 180% 0;
+  }
+}
+
+.qp-enter {
+  animation: qp-fade-up 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Staggered entrance for grids. Capped at six steps — beyond that the last card feels slow to arrive. */
+.qp-stagger > * {
+  animation: qp-fade-up 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.qp-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.qp-stagger > *:nth-child(2) { animation-delay: 45ms; }
+.qp-stagger > *:nth-child(3) { animation-delay: 90ms; }
+.qp-stagger > *:nth-child(4) { animation-delay: 135ms; }
+.qp-stagger > *:nth-child(5) { animation-delay: 180ms; }
+.qp-stagger > *:nth-child(n + 6) { animation-delay: 225ms; }
+
+.qp-live-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #10B981;
-  animation: pulse-ring 2s infinite;
+  background-color: var(--qp-primary, #7c5cff);
   display: inline-block;
+  flex-shrink: 0;
+  animation: qp-pulse-ring 2s infinite;
+}
+
+.qp-live-dot--success {
+  background-color: #12b981;
+}
+
+.qp-live-dot--idle {
+  background-color: #8b93a7;
+  animation: none;
+}
+
+/*
+ * Honour the OS reduced-motion preference at the stylesheet level as well as in the theme, so
+ * animations declared in plain CSS are covered too. Animations are neutralized rather than removed so
+ * elements still end in their final state instead of disappearing.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .qp-lift:hover {
+    transform: none;
+  }
+}
+
+/* ─── Layout safety ─────────────────────────────────────────────────────────── */
+
+/*
+ * The page must never scroll sideways. Wide content (tables, code, charts) is given its own
+ * horizontally scrollable container instead; this is the backstop that keeps one overflowing child
+ * from dragging the whole layout with it.
+ */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+.qp-scroll-x {
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Truncation helper for paths and URLs that would otherwise stretch a table cell indefinitely. */
+.qp-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Skeleton fill for loading placeholders. */
+.qp-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--qp-border, rgba(255, 255, 255, 0.09)) 25%,
+    var(--qp-border-strong, rgba(255, 255, 255, 0.16)) 50%,
+    var(--qp-border, rgba(255, 255, 255, 0.09)) 75%
+  );
+  background-size: 220% 100%;
+  animation: qp-shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+
+/* Recharts renders an inline SVG that reports a larger intrinsic width than its flex parent allows;
+   without this the chart forces its container wider on narrow viewports. */
+.recharts-wrapper,
+.recharts-surface {
+  max-width: 100%;
 }

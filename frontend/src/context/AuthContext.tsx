@@ -1,13 +1,12 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { jwtDecode } from 'jwt-decode';
-import { getStoredToken, setStoredToken } from '../api/httpClient';
+import { clearSession, getStoredToken, getStoredUserRaw, setStoredToken, setStoredUserRaw } from '../api/httpClient';
 import * as authApi from '../api/authApi';
 import type { LoginRequest, RegisterRequest, UserSummary } from '../types/auth';
 
 interface AuthContextValue {
   user: UserSummary | null;
   isAuthenticated: boolean;
-  isInitializing: boolean;
   login: (request: LoginRequest) => Promise<void>;
   register: (request: RegisterRequest) => Promise<void>;
   logout: () => void;
@@ -19,6 +18,13 @@ interface DecodedToken {
   exp: number;
 }
 
+/**
+ * True when the stored token has expired.
+ *
+ * <p>Checked before restoring a session so an expired token never produces a UI that looks logged in but
+ * fails every request. Any decode failure is treated as expired: an unparseable token is unusable either
+ * way, and assuming the worst is the safe direction.
+ */
 function isTokenExpired(token: string): boolean {
   try {
     const decoded = jwtDecode<DecodedToken>(token);
@@ -28,8 +34,8 @@ function isTokenExpired(token: string): boolean {
   }
 }
 
-function loadUserFromStorage(): UserSummary | null {
-  const raw = localStorage.getItem('ai-testpilot.user');
+function loadStoredUser(): UserSummary | null {
+  const raw = getStoredUserRaw();
   if (!raw) return null;
   try {
     return JSON.parse(raw) as UserSummary;
@@ -39,18 +45,20 @@ function loadUserFromStorage(): UserSummary | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // Resolved synchronously from localStorage, so the first render already knows whether the user is
+  // authenticated. An async check would flash the login page for anyone with a valid session.
   const [user, setUser] = useState<UserSummary | null>(() => {
     const token = getStoredToken();
     if (!token || isTokenExpired(token)) {
-      setStoredToken(null);
+      clearSession();
       return null;
     }
-    return loadUserFromStorage();
+    return loadStoredUser();
   });
 
   const persistSession = useCallback((token: string, sessionUser: UserSummary) => {
     setStoredToken(token);
-    localStorage.setItem('ai-testpilot.user', JSON.stringify(sessionUser));
+    setStoredUserRaw(JSON.stringify(sessionUser));
     setUser(sessionUser);
   }, []);
 
@@ -71,13 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
-    setStoredToken(null);
-    localStorage.removeItem('ai-testpilot.user');
+    clearSession();
     setUser(null);
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, isAuthenticated: user !== null, isInitializing: false, login, register, logout }),
+    () => ({ user, isAuthenticated: user !== null, login, register, logout }),
     [user, login, register, logout],
   );
 
@@ -85,9 +92,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
+  const context = useContext(AuthContext);
+  if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  return ctx;
+  return context;
 }

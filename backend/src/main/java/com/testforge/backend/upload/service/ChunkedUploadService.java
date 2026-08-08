@@ -137,7 +137,8 @@ public class ChunkedUploadService {
             return new ProjectResponse(project.getId(), project.getName(), project.getDescription(), project.getSourceType(),
                     project.getRepoUrl(), project.getTargetUrl(), project.getTargetApiUrl(),
                     project.getPrimaryLanguage(), project.getFileCount(), project.getStatus(),
-                    project.getSwaggerFilePath() != null, project.getProcessingError(), project.getCreatedAt(), project.getUpdatedAt());
+                    project.getSwaggerFilePath() != null, project.getProcessingError(), project.getDiscoveryNotes(),
+                    project.getCreatedAt(), project.getUpdatedAt());
         } catch (RuntimeException ex) {
             session.setStatus(UploadSessionStatus.FAILED);
             session.setErrorMessage(ex.getMessage());
