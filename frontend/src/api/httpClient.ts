@@ -32,8 +32,13 @@ httpClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      // Only force-redirect if we had a token that is now invalid (session expired).
+      // If no token was stored, the user is already on a public page or ProtectedRoute
+      // will handle the redirect gracefully.
+      const hadToken = !!getStoredToken();
       setStoredToken(null);
-      if (!window.location.pathname.startsWith('/login')) {
+      localStorage.removeItem('ai-testpilot.user');
+      if (hadToken && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/register')) {
         window.location.href = '/login';
       }
     }

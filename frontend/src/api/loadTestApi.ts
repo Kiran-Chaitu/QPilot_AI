@@ -1,4 +1,5 @@
 import { httpClient } from './httpClient';
+import type { ApiResponse } from '../types/common';
 
 export interface RateLimitPolicyItem {
   policy: string;
@@ -31,11 +32,11 @@ export async function runLoadTest(
   durationSeconds: number,
   rampUpSeconds: number
 ): Promise<LoadTestResponse> {
-  const response = await httpClient.post<LoadTestResponse>('/loadtest/run', {
+  const { data } = await httpClient.post<ApiResponse<LoadTestResponse>>('/loadtest/run', {
     targetUrl,
     vus,
     durationSeconds,
     rampUpSeconds,
   });
-  return response.data;
+  return data.data as LoadTestResponse;
 }

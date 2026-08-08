@@ -1,4 +1,5 @@
 import { httpClient } from './httpClient';
+import type { ApiResponse } from '../types/common';
 
 export interface HeaderAuditItem {
   name: string;
@@ -30,6 +31,6 @@ export interface WebsiteAuditResponse {
 }
 
 export async function runWebsiteAudit(targetUrl: string): Promise<WebsiteAuditResponse> {
-  const response = await httpClient.post<WebsiteAuditResponse>('/website/audit', { targetUrl });
-  return response.data;
+  const { data } = await httpClient.post<ApiResponse<WebsiteAuditResponse>>('/website/audit', { targetUrl });
+  return data.data as WebsiteAuditResponse;
 }

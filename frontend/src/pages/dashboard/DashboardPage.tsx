@@ -32,6 +32,7 @@ import {
   Activity,
   ArrowUpRight,
   FileCode,
+  MonitorCheck,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -49,9 +50,9 @@ import { AppLayout } from '../../components/layout/AppLayout';
 import { StatusChip } from '../../components/common/StatusChip';
 import { UploadProjectDialog } from './UploadProjectDialog';
 import { listProjects } from '../../api/projectApi';
+import { getDashboardStats, type DashboardStats } from '../../api/dashboardApi';
 import { extractErrorMessage } from '../../api/httpClient';
 import type { ProjectResponse } from '../../types/project';
-import type { SecurityFindingResponse, GeneratedTestResponse } from '../../types/analysis';
 
 // Tab components
 import { WebsiteAuditorTab } from '../project/tabs/WebsiteAuditorTab';
@@ -59,76 +60,15 @@ import { LoadTesterTab } from '../project/tabs/LoadTesterTab';
 import { SecurityReportTab } from '../project/tabs/SecurityReportTab';
 import { GeneratedTestsTab } from '../project/tabs/GeneratedTestsTab';
 import { ReportTab } from '../project/tabs/ReportTab';
+import { E2eTestTab } from '../project/tabs/E2eTestTab';
 
-const COVERAGE_TREND_DATA = [
-  { day: 'Mon', coverage: 65, risk: 35 },
-  { day: 'Tue', coverage: 70, risk: 28 },
-  { day: 'Wed', coverage: 78, risk: 22 },
-  { day: 'Thu', coverage: 82, risk: 18 },
-  { day: 'Fri', coverage: 86, risk: 14 },
-  { day: 'Sat', coverage: 89, risk: 11 },
-  { day: 'Sun', coverage: 92, risk: 8 },
-];
-
-const TEST_DISTRIBUTION_DATA = [
-  { name: 'Unit Tests', value: 45, color: '#10B981' },
-  { name: 'API Tests', value: 25, color: '#34D399' },
-  { name: 'Security Tests', value: 15, color: '#F59E0B' },
-  { name: 'Integration Tests', value: 15, color: '#A855F7' },
-];
-
-const DEMO_SECURITY_FINDINGS: SecurityFindingResponse[] = [
-  {
-    id: 1,
-    severity: 'HIGH',
-    category: 'CORS_MISCONFIGURATION',
-    description: 'Wildcard Access-Control-Allow-Origin header detected in API configuration.',
-    recommendation: 'Specify explicit trusted origin domain instead of wildcard "*".',
-    location: 'src/main/java/com/app/config/WebConfig.java:L42',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    severity: 'CRITICAL',
-    category: 'SQL_INJECTION',
-    description: 'Unsanitized string concatenation in native SQL query execution.',
-    recommendation: 'Use parameterized JPA queries or prepared statements.',
-    location: 'src/main/java/com/app/repository/UserRepository.java:L88',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 3,
-    severity: 'MEDIUM',
-    category: 'HARDCODED_SECRET',
-    description: 'Potential JWT secret fallback detected in application property defaults.',
-    recommendation: 'Inject secret keys exclusively via system environment variables.',
-    location: 'src/main/resources/application.yml:L14',
-    createdAt: new Date().toISOString(),
-  },
-];
-
-const DEMO_GENERATED_TESTS: GeneratedTestResponse[] = [
-  {
-    id: 1,
-    title: 'JWT Authentication Null Token Fallback Test',
-    framework: 'JUnit 5 & Mockito',
-    type: 'SECURITY',
-    targetName: 'AuthController.authenticateUser',
-    code: `@Test\nvoid testAuthenticate_WithMissingBearerToken_Returns401() {\n    MockHttpServletRequest request = new MockHttpServletRequest();\n    ResponseEntity<?> response = authController.login(request, null);\n    assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());\n}`,
-    description: 'Validates that missing or malformed JWT headers return HTTP 401 status without NPE.',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    title: 'Synthetic End-to-End User Sign-in & Dashboard Flow',
-    framework: 'Playwright',
-    type: 'API',
-    targetName: 'E2E User Onboarding',
-    code: `test('User can sign in and navigate to quality dashboard', async ({ page }) => {\n  await page.goto('http://localhost:5173/login');\n  await page.fill('input[type="email"]', 'admin@qpilot.ai');\n  await page.fill('input[type="password"]', 'Password123!');\n  await page.click('button[type="submit"]');\n  await expect(page.locator('h5')).toContainText('Quality Command Center');\n});`,
-    description: 'Automated browser test validating user sign in and dashboard navigation.',
-    createdAt: new Date().toISOString(),
-  },
-];
+const TEST_TYPE_COLORS: Record<string, string> = {
+  UNIT: '#10B981',
+  API: '#34D399',
+  SECURITY: '#F59E0B',
+  INTEGRATION: '#A855F7',
+  EDGE_CASE: '#6366F1',
+};
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -136,6 +76,7 @@ export function DashboardPage() {
   const currentTab = searchParams.get('tab') || 'overview';
 
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -144,8 +85,12 @@ export function DashboardPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await listProjects();
-      setProjects(data);
+      const [projectData, statsData] = await Promise.all([
+        listProjects(),
+        getDashboardStats().catch(() => null),
+      ]);
+      setProjects(projectData);
+      if (statsData) setStats(statsData);
     } catch (err) {
       setError(extractErrorMessage(err, 'Could not load your projects.'));
     } finally {
@@ -165,8 +110,24 @@ export function DashboardPage() {
     }
   };
 
-  const totalProjects = projects.length;
-  const analyzedProjects = projects.filter((p) => p.status === 'ANALYZED').length;
+  const totalProjects = stats?.totalProjects ?? projects.length;
+  const analyzedProjects = stats?.analyzedProjects ?? projects.filter((p) => p.status === 'ANALYZED').length;
+  const avgCoverage = stats?.avgCoveragePercent ?? 0;
+  const avgRisk = stats?.avgRiskScore ?? 0;
+  const totalTests = stats?.totalTestsGenerated ?? 0;
+
+  // Build chart-ready test distribution data from real stats
+  const testDistData = (stats?.testDistribution ?? []).map((td) => ({
+    name: td.type.charAt(0) + td.type.slice(1).toLowerCase().replace('_', ' ') + ' Tests',
+    value: td.count,
+    color: TEST_TYPE_COLORS[td.type] || '#A1A1AA',
+  }));
+
+  // Use real advice from security findings
+  const qualityAdvice = (stats?.topAdvice ?? []).slice(0, 3).map((a) => ({
+    title: a.category.replace(/_/g, ' '),
+    desc: a.description,
+  }));
 
   return (
     <AppLayout disableScroll={false} onRefreshProjects={loadProjects}>
@@ -219,6 +180,7 @@ export function DashboardPage() {
             <Tab label="Safe Load Tester" value="loadtest" icon={<Gauge size={14} />} iconPosition="start" />
             <Tab label="Security Audit" value="security" icon={<ShieldCheck size={14} />} iconPosition="start" />
             <Tab label="AI Test Generators" value="tests" icon={<FileCode size={14} />} iconPosition="start" />
+            <Tab label="E2E Browser Test" value="e2e" icon={<MonitorCheck size={14} />} iconPosition="start" />
             <Tab label="Quality Reports" value="reports" />
           </Tabs>
         </Box>
@@ -260,10 +222,10 @@ export function DashboardPage() {
                       AVG CODE COVERAGE
                     </Typography>
                     <Typography variant="h4" sx={{ fontWeight: 800, color: 'success.main', lineHeight: 1.2, my: 0.5 }}>
-                      92.4%
+                      {isLoading ? <Skeleton width={60} /> : `${avgCoverage}%`}
                     </Typography>
                     <Typography variant="caption" color="success.main" sx={{ fontWeight: 700, fontSize: '0.7rem' }}>
-                      +14% Test Velocity
+                      {avgCoverage > 0 ? 'Across All Projects' : 'No Data Yet'}
                     </Typography>
                   </Box>
                   <Box sx={{ p: 1.2, borderRadius: 2.5, bgcolor: 'rgba(16, 185, 129, 0.12)' }}>
@@ -279,10 +241,10 @@ export function DashboardPage() {
                       SYSTEM RISK INDEX
                     </Typography>
                     <Typography variant="h4" sx={{ fontWeight: 800, color: 'warning.main', lineHeight: 1.2, my: 0.5 }}>
-                      8.2 <Typography component="span" variant="caption" color="text.secondary">/ 100</Typography>
+                      {isLoading ? <Skeleton width={60} /> : <>{avgRisk} <Typography component="span" variant="caption" color="text.secondary">/ 100</Typography></>}
                     </Typography>
                     <Typography variant="caption" color="success.main" sx={{ fontWeight: 700, fontSize: '0.7rem' }}>
-                      Low Vulnerability Profile
+                      {avgRisk <= 20 ? 'Low Vulnerability Profile' : avgRisk <= 50 ? 'Moderate Risk' : 'High Risk'}
                     </Typography>
                   </Box>
                   <Box sx={{ p: 1.2, borderRadius: 2.5, bgcolor: 'rgba(245, 158, 11, 0.12)' }}>
@@ -298,10 +260,10 @@ export function DashboardPage() {
                       TEST SUITES GENERATED
                     </Typography>
                     <Typography variant="h4" sx={{ fontWeight: 800, color: 'secondary.main', lineHeight: 1.2, my: 0.5 }}>
-                      340
+                      {isLoading ? <Skeleton width={40} /> : totalTests}
                     </Typography>
                     <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                      JUnit, Playwright, Cypress
+                      {totalTests > 0 ? 'JUnit, Playwright, Cypress' : 'No Tests Yet'}
                     </Typography>
                   </Box>
                   <Box sx={{ p: 1.2, borderRadius: 2.5, bgcolor: 'rgba(168, 85, 247, 0.12)' }}>
@@ -313,43 +275,52 @@ export function DashboardPage() {
 
             {/* Analytics Section - Charts with EXPLICIT pixel heights so they NEVER collapse */}
             <Grid container spacing={2}>
-              {/* Coverage & Risk Chart */}
+              {/* Coverage & Risk Summary */}
               <Grid size={{ xs: 12, lg: 8 }}>
                 <Card sx={{ p: 2.5, height: '100%' }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                      Quality & Coverage Velocity Trend
+                      Quality & Coverage Overview
                     </Typography>
                     <Chip label="Live Metrics" size="small" color="primary" variant="outlined" sx={{ height: 20, fontSize: '0.68rem', fontWeight: 700 }} />
                   </Box>
-                  <Box sx={{ width: '100%', height: 220 }}>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <AreaChart data={COVERAGE_TREND_DATA} margin={{ top: 10, right: 15, left: -20, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="coverageGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
-                            <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
-                          </linearGradient>
-                          <linearGradient id="riskGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#EF4444" stopOpacity={0.0} />
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="day" stroke="#A1A1AA" fontSize={11} tickLine={false} />
-                        <YAxis stroke="#A1A1AA" fontSize={11} tickLine={false} />
-                        <RechartsTooltip
-                          contentStyle={{
-                            backgroundColor: '#121215',
-                            borderColor: 'rgba(255,255,255,0.1)',
-                            borderRadius: 10,
-                            color: '#FAFAFA',
-                          }}
-                        />
-                        <Area type="monotone" dataKey="coverage" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#coverageGrad)" name="Coverage %" />
-                        <Area type="monotone" dataKey="risk" stroke="#EF4444" strokeWidth={2} fillOpacity={1} fill="url(#riskGrad)" name="Risk Index" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </Box>
+                  {analyzedProjects > 0 ? (
+                    <Box sx={{ width: '100%', height: 220 }}>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <AreaChart data={[{ label: 'Coverage', value: avgCoverage }, { label: 'Risk', value: avgRisk }]} margin={{ top: 10, right: 15, left: -20, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="coverageGrad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
+                              <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
+                            </linearGradient>
+                          </defs>
+                          <XAxis dataKey="label" stroke="#A1A1AA" fontSize={11} tickLine={false} />
+                          <YAxis stroke="#A1A1AA" fontSize={11} tickLine={false} domain={[0, 100]} />
+                          <RechartsTooltip
+                            contentStyle={{
+                              backgroundColor: '#121215',
+                              borderColor: 'rgba(255,255,255,0.1)',
+                              borderRadius: 10,
+                              color: '#FAFAFA',
+                            }}
+                          />
+                          <Area type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2.5} fillOpacity={1} fill="url(#coverageGrad)" name="Metric Value" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </Box>
+                  ) : (
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.02)' }}>
+                      <Stack spacing={1} sx={{ alignItems: 'center' }}>
+                        <TrendingUp size={32} color="#A1A1AA" />
+                        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                          No analysis data yet
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Run AI analysis on a project to see coverage & risk metrics
+                        </Typography>
+                      </Stack>
+                    </Box>
+                  )}
                 </Card>
               </Grid>
 
@@ -359,37 +330,50 @@ export function DashboardPage() {
                   <Typography variant="subtitle1" sx={{ fontWeight: 800, mb: 1 }}>
                     Generated Test Mix
                   </Typography>
-                  <Box sx={{ flexGrow: 1, width: '100%', height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <ResponsiveContainer width="100%" height={160}>
-                      <PieChart>
-                        <Pie data={TEST_DISTRIBUTION_DATA} cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={4} dataKey="value">
-                          {TEST_DISTRIBUTION_DATA.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <RechartsTooltip
-                          contentStyle={{
-                            backgroundColor: '#121215',
-                            borderColor: 'rgba(255,255,255,0.1)',
-                            borderRadius: 10,
-                            color: '#FAFAFA',
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </Box>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-around', pt: 1 }}>
-                    {TEST_DISTRIBUTION_DATA.map((item) => (
-                      <Box key={item.name} sx={{ textAlign: 'center' }}>
-                        <Typography variant="caption" sx={{ color: item.color, fontWeight: 800, fontSize: '0.75rem', display: 'block' }}>
-                          {item.value}%
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem' }}>
-                          {item.name.split(' ')[0]}
-                        </Typography>
+                  {testDistData.length > 0 ? (
+                    <>
+                      <Box sx={{ flexGrow: 1, width: '100%', height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ResponsiveContainer width="100%" height={160}>
+                          <PieChart>
+                            <Pie data={testDistData} cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={4} dataKey="value">
+                              {testDistData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                            <RechartsTooltip
+                              contentStyle={{
+                                backgroundColor: '#121215',
+                                borderColor: 'rgba(255,255,255,0.1)',
+                                borderRadius: 10,
+                                color: '#FAFAFA',
+                              }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
                       </Box>
-                    ))}
-                  </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-around', pt: 1 }}>
+                        {testDistData.map((item) => (
+                          <Box key={item.name} sx={{ textAlign: 'center' }}>
+                            <Typography variant="caption" sx={{ color: item.color, fontWeight: 800, fontSize: '0.75rem', display: 'block' }}>
+                              {item.value}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.68rem' }}>
+                              {item.name.split(' ')[0]}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    </>
+                  ) : (
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexGrow: 1, borderRadius: 2, bgcolor: 'rgba(255,255,255,0.02)' }}>
+                      <Stack spacing={1} sx={{ alignItems: 'center' }}>
+                        <FileCode2 size={28} color="#A1A1AA" />
+                        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                          No tests generated yet
+                        </Typography>
+                      </Stack>
+                    </Box>
+                  )}
                 </Card>
               </Grid>
             </Grid>
@@ -406,11 +390,7 @@ export function DashboardPage() {
                     </Typography>
                   </Box>
                   <Stack spacing={1.5}>
-                    {[
-                      { title: 'API Auth Coverage Deficit', desc: 'Add JWT authorization tests for 4 endpoint handlers in AuthController.' },
-                      { title: 'Potential N+1 Query Anti-Pattern', desc: 'Detected lazy fetching loop in UserProjectRepository.' },
-                      { title: 'CORS Security Header Warning', desc: 'Wildcard Access-Control-Allow-Origin detected in WebConfig.java.' },
-                    ].map((rec, i) => (
+                    {qualityAdvice.length > 0 ? qualityAdvice.map((rec, i) => (
                       <Paper key={i} sx={{ p: 1.5, borderRadius: 2.5, bgcolor: 'rgba(16, 185, 129, 0.04)', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: '0.82rem', color: 'primary.main' }}>
                           {rec.title}
@@ -419,7 +399,17 @@ export function DashboardPage() {
                           {rec.desc}
                         </Typography>
                       </Paper>
-                    ))}
+                    )) : (
+                      <Paper sx={{ p: 2.5, borderRadius: 2.5, bgcolor: 'rgba(16, 185, 129, 0.04)', border: '1px solid rgba(16, 185, 129, 0.15)', textAlign: 'center' }}>
+                        <Zap size={24} color="#A1A1AA" style={{ marginBottom: 8 }} />
+                        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                          No security findings yet
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Run AI analysis on a project to get quality advice
+                        </Typography>
+                      </Paper>
+                    )}
                   </Stack>
                 </Card>
               </Grid>
@@ -493,9 +483,11 @@ export function DashboardPage() {
 
         {currentTab === 'loadtest' && <LoadTesterTab />}
 
-        {currentTab === 'security' && <SecurityReportTab findings={DEMO_SECURITY_FINDINGS} />}
+        {currentTab === 'e2e' && <E2eTestTab />}
 
-        {currentTab === 'tests' && <GeneratedTestsTab tests={DEMO_GENERATED_TESTS} />}
+        {currentTab === 'security' && <SecurityReportTab findings={[]} />}
+
+        {currentTab === 'tests' && <GeneratedTestsTab tests={[]} />}
 
         {currentTab === 'reports' && (
           <ReportTab

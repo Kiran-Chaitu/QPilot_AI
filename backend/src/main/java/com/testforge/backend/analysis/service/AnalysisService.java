@@ -38,6 +38,7 @@ import java.util.Locale;
 public class AnalysisService {
 
     private static final Logger log = LoggerFactory.getLogger(AnalysisService.class);
+    private static final long INTER_AGENT_DELAY_MS = 5000; // 5 seconds between agent calls to avoid rate limits
 
     private final ProjectService projectService;
     private final SwaggerParsingService swaggerParsingService;
@@ -101,6 +102,8 @@ public class AnalysisService {
             run.setCodeSummaryJson(codeSummaryResult.rawJson());
             analysisRunRepository.save(run);
 
+            interAgentDelay();
+
             // 2. Test Generation agent
             List<GeneratedTest> savedTests = new ArrayList<>();
             AiPrompt testPrompt = promptBuilder.testGenerationPrompt(project.getName(), projectContext, codeSummaryResult.rawJson());
@@ -127,6 +130,8 @@ public class AnalysisService {
                 log.warn("Test Generation agent failed for project {}: {}", projectId, testResult.errorMessage());
             }
 
+            interAgentDelay();
+
             // 3. Security Analysis agent
             List<SecurityFinding> savedFindings = new ArrayList<>();
             AiPrompt securityPrompt = promptBuilder.securityAnalysisPrompt(project.getName(), projectContext, codeSummaryResult.rawJson());
@@ -151,6 +156,8 @@ public class AnalysisService {
             } else {
                 log.warn("Security Analysis agent failed for project {}: {}", projectId, securityResult.errorMessage());
             }
+
+            interAgentDelay();
 
             // 4. Coverage & Risk agent
             RiskAssessment riskAssessment = null;
@@ -256,6 +263,17 @@ public class AnalysisService {
         logEntry.setErrorMessage(result.errorMessage());
         aiRequestLogRepository.save(logEntry);
         return result;
+    }
+
+    /** Pauses between sequential agent calls to spread requests and avoid Gemini free-tier rate limits. */
+    private void interAgentDelay() {
+        try {
+            log.debug("Inter-agent delay: waiting {}ms before next agent call", INTER_AGENT_DELAY_MS);
+            Thread.sleep(INTER_AGENT_DELAY_MS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Inter-agent delay interrupted");
+        }
     }
 
     private SwaggerParseResult tryParseSwagger(Project project) {

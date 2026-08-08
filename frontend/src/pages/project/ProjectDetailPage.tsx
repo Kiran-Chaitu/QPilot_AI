@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, Link as RouterLink } from 'react-router-dom';
 import {
   Alert,
@@ -26,6 +26,7 @@ import {
   Layers,
   TrendingUp,
   ExternalLink,
+  MonitorCheck,
 } from 'lucide-react';
 import { AppLayout } from '../../components/layout/AppLayout';
 import { StatusChip } from '../../components/common/StatusChip';
@@ -41,12 +42,14 @@ import { RiskCoverageTab } from './tabs/RiskCoverageTab';
 import { ReportTab } from './tabs/ReportTab';
 import { WebsiteAuditorTab } from './tabs/WebsiteAuditorTab';
 import { LoadTesterTab } from './tabs/LoadTesterTab';
+import { E2eTestTab } from './tabs/E2eTestTab';
 
 const TABS = [
   { label: 'Overview & Stack', icon: <Layers size={16} /> },
   { label: 'Generated Tests', icon: <FileCode2 size={16} /> },
   { label: 'Synthetic Web Auditor', icon: <Globe size={16} /> },
   { label: 'Safe Load Tester', icon: <Gauge size={16} /> },
+  { label: 'E2E Browser Test', icon: <MonitorCheck size={16} /> },
   { label: 'Security Audit', icon: <ShieldCheck size={16} /> },
   { label: 'Risk & Coverage', icon: <TrendingUp size={16} /> },
   { label: 'Executive Report', icon: <FileText size={16} /> },
@@ -66,7 +69,6 @@ export function ProjectDetailPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadProject = useCallback(async () => {
     setIsLoading(true);
@@ -97,19 +99,25 @@ export function ProjectDetailPage() {
     if (detail?.project.status !== 'EXTRACTING') {
       return;
     }
-    pollTimeoutRef.current = setTimeout(async () => {
+    const interval = setInterval(async () => {
       try {
         const data = await getProjectDetail(projectId);
         setDetail(data);
+        if (data.project.status !== 'EXTRACTING') {
+          clearInterval(interval);
+          // Fetch analysis data once extraction completes
+          try {
+            const latest = await getLatestAnalysis(projectId);
+            setAnalysis(latest);
+          } catch {
+            // No analysis yet — that's fine
+          }
+        }
       } catch {
-        // ignore polling retry
+        // ignore polling errors
       }
     }, EXTRACTING_POLL_INTERVAL_MS);
-    return () => {
-      if (pollTimeoutRef.current) {
-        clearTimeout(pollTimeoutRef.current);
-      }
-    };
+    return () => clearInterval(interval);
   }, [detail?.project.status, projectId]);
 
   async function handleAnalyze() {
@@ -294,11 +302,13 @@ export function ProjectDetailPage() {
 
       {activeTab === 3 && <LoadTesterTab defaultApiUrl={detail.project.targetApiUrl} />}
 
-      {activeTab === 4 && <SecurityReportTab findings={analysis?.securityFindings ?? []} />}
+      {activeTab === 4 && <E2eTestTab defaultUrl={detail.project.targetUrl} />}
 
-      {activeTab === 5 && <RiskCoverageTab risk={analysis?.risk} />}
+      {activeTab === 5 && <SecurityReportTab findings={analysis?.securityFindings ?? []} />}
 
-      {activeTab === 6 && (
+      {activeTab === 6 && <RiskCoverageTab risk={analysis?.risk} />}
+
+      {activeTab === 7 && (
         <ReportTab projectId={projectId} projectName={detail.project.name} hasAnalysis={analysis !== null} />
       )}
     </AppLayout>
